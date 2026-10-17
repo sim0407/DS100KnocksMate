@@ -1,0 +1,15 @@
+# 依存の更新を知らせる（自動マージはしない。更新時はテストと脆弱性スキャンを確認してから取り込む）
+version: 2
+updates:
+  - package-ecosystem: docker
+    directories: ["/docker/app", "/docker/worker", "/docker/db"]
+    schedule:
+      interval: monthly
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+  - package-ecosystem: uv
+    directory: "/"
+    schedule:
+      interval: monthly

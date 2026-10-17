@@ -2,7 +2,7 @@
 #
 # 依存の更新:  uv export --only-group worker --format requirements-txt --no-emit-project -o docker/worker/requirements.txt
 #             uv export --only-group dev    --format requirements-txt --no-emit-project -o docker/worker/requirements-test.txt
-FROM python:3.12.13-slim@sha256:229a2c5bfa27522db7815ea81f9bed70af17ccb9de9fc7ad142b1877b5830d36 AS base
+FROM python:3.12.15-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1 AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

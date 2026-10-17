@@ -115,15 +115,15 @@ Docker未導入のため、Docker不要の 0-A を先行し、Docker Desktop導�
 
 ### タスク
 
-- [ ] README：目的、画面例、セットアップ、アンインストール、データ保存、学習方法。
-- [ ] 起動のハードルを下げる：ダブルクリックで起動〜ブラウザ表示まで行う起動用ファイル（Windows `start.bat` / macOS `start.command`）。ビルド済みイメージ配布も検討（2026-10-18 ユーザー合意）。
-- [ ] `LICENSE`, `THIRD_PARTY_NOTICES`, 出典・原教材commitを整備。
-- [ ] `.gitignore` と秘密情報、DBデータ、ユーザー解答の混入を検査。
-- [ ] Windows/Docker DesktopとmacOSで再現性を確認（未対応OSは明示）。
-- [ ] 依存関係・Dockerイメージの脆弱性検査、最小権限設定の見直し。
-- [ ] CIで単体・統合テスト、lintを実行。
-- [ ] 公式団体の承認・提携によるサービスではないことを明記。
-- [ ] **GitHubへの公開・pushはユーザーの最終承認後**。
+- [x] README：目的、画面例、セットアップ、アンインストール、データ保存、学習方法。
+- [x] 起動のハードルを下げる（start.bat/stop.bat は Windows で実機確認、start.command/stop.command は構文確認のみ・macOS 未確認。ビルド済みイメージ配布は見送り）：ダブルクリックで起動〜ブラウザ表示まで行う起動用ファイル（Windows `start.bat` / macOS `start.command`）。ビルド済みイメージ配布も検討（2026-10-18 ユーザー合意）。
+- [x] `LICENSE`, `THIRD_PARTY_NOTICES`, 出典・原教材commitを整備。（MIT, sim0407。依存ライセンスは docs/DEPENDENCY_LICENSES.md）
+- [x] `.gitignore` と秘密情報、DBデータ、ユーザー解答の混入を検査。（gitleaks で全履歴に検出なし。`.gitignore` の誤りで core/progress が未コミットだったのを発見・修正し、再発防止テストを追加）
+- [x] Windows/Docker DesktopとmacOSで再現性を確認（未対応OSは明示）。（Windows は空の clone から起動・統合テストまで確認。macOS は実機がなく未確認と README に明記）
+- [x] 依存関係・Dockerイメージの脆弱性検査、最小権限設定の見直し。（pip-audit で既知の脆弱性なし。Trivy でイメージを確認し、Python ベースイメージを 3.12.15 に更新して CRITICAL 0・修正版のある脆弱性 0 に。db は上流ベースイメージの更新待ち。db も cap_drop ALL・no-new-privileges。Dependabot を設定。手順は docs/RELEASE_CHECKLIST.md）
+- [x] CIで単体・統合テスト、lintを実行。（.github/workflows/ci.yml。actionlint で検証、lint・単体ジョブは Linux コンテナで再現済み。GitHub 上での実行は push 後）
+- [x] 公式団体の承認・提携によるサービスではないことを明記。（README・画面・THIRD_PARTY_NOTICES）
+- [ ] **GitHubへの公開・pushはユーザーの最終承認後**。（2026-10-18 時点で未実施）
 
 ### Done条件
 

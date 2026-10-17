@@ -39,3 +39,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## 依存ライブラリ
+
+利用者が Docker イメージをビルドするときにインストールされる Python パッケージ（pandas, scikit-learn, Streamlit, psycopg など）のライセンスは [docs/DEPENDENCY_LICENSES.md](docs/DEPENDENCY_LICENSES.md) を参照してください。本リポジトリはこれらを同梱・再配布していません。

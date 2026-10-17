@@ -130,4 +130,4 @@
 - Python：コードの最後の式の値を結果として表示・採点する（Jupyter同様）。`print` は標準出力欄。最後が式でない場合は案内メッセージを出す。利用可能な変数は公式セットアップと同じ `df_customer` / `df_category` / `df_product` / `df_receipt` / `df_store` / `df_geocode`。ライブラリは公式セットアップでimportされるもの（pandas, numpy, scikit-learn, imbalanced-learn, dateutil 等）を事前に用意。
 - SQL：Phase 1は単一のSELECT文（CTE含む）のみ。教材DBは読み取り専用。
 - 表示は先頭の一定行数（既定200行）に制限し、総行数と「省略あり」を明示。採点は表示制限とは別に全結果（上限付き）で行う。
-- Python 3.12 + pandas 2.2系など現行版を使用（公式Notebookは pandas 1.5.3）。公式解答が動作しない問題は対応状況に記録する。
+- Python 3.12 + pandas 3.0.6 を使用（公式Notebookは pandas 1.5.3）。pandas 3.0 で動作しない公式解答（071/072/073/083/084/086）は3.0対応の参照解答を用意し、上流との差分を記録する。

@@ -11,9 +11,17 @@ dev = [
     "pytest>=9.1.1",
     "ruff>=0.17.1",
 ]
+worker = [
+    "imbalanced-learn==0.14.2",
+    "numpy==2.5.4",
+    "pandas==3.0.6",
+    "python-dateutil==2.9.0.post0",
+    "scikit-learn==1.9.1",
+]
 
 [tool.uv]
 package = false
+default-groups = ["dev", "worker"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

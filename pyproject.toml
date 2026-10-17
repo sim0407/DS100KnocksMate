@@ -1,0 +1,32 @@
+[project]
+name = "ds100knocks-trainer"
+version = "0.0.1"
+description = "データサイエンス100本ノック（構造化データ加工編）をローカルで解いて採点・進捗保存する学習アプリ（非公式）"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.17.1",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = [
+    "integration: Docker/PostgreSQL等の外部環境が必要なテスト",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["upstream"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501"]  # 行長はformatterに任せる（全角文字を幅2として数えるため）

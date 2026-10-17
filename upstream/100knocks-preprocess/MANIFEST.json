@@ -1,0 +1,77 @@
+{
+  "repository": "https://github.com/The-Japan-DataScientist-Society/100knocks-preprocess",
+  "commit": "81e637c5a9d003763dafbbabb91e070674342c2c",
+  "license_note": "docker/doc/100knocks_guide.pdf のみ CC BY-ND（同梱しない）。その他は MIT。",
+  "files": [
+    {
+      "path": "LICENSE",
+      "sha256": "3925cccab323ac0f4fc7d431239733c1ed7f209307edb24460d7bfc4428033ff",
+      "size": 19944
+    },
+    {
+      "path": "docker/work/preprocess_knock_Python.ipynb",
+      "sha256": "a3aa50aff2df256a3052504910b599145f4ad0c05ea36a4d1c5ab966a0637c85",
+      "size": 59125
+    },
+    {
+      "path": "docker/work/preprocess_knock_SQL.ipynb",
+      "sha256": "44b99dc75e40e35b87f885ff1b7464b76002e305c3472eedef3dc4db34bcaf6b",
+      "size": 59788
+    },
+    {
+      "path": "docker/work/answer/ans_preprocess_knock_Python.ipynb",
+      "sha256": "2ab933e4deb7916fbeab06ec1be4ac6bb86a74f59b9b8bc52649f92b8037fce4",
+      "size": 601014
+    },
+    {
+      "path": "docker/work/answer/ans_preprocess_knock_SQL.ipynb",
+      "sha256": "b291de176eb7bb94f25579ea1af54d1e9fbab582daa61912e6a6b29c4b05b41a",
+      "size": 531803
+    },
+    {
+      "path": "docker/work/data/category.csv",
+      "sha256": "f2e16aeddb440a1eab7f980230e2f7cbe274246759e112b8fe420f2b95e4ac18",
+      "size": 12885
+    },
+    {
+      "path": "docker/work/data/customer.csv",
+      "sha256": "61c35481fb54849158e6d11ccb988eb8c0f992dfb4e639e7105988c0ae8b0164",
+      "size": 2915401
+    },
+    {
+      "path": "docker/work/data/geocode.csv",
+      "sha256": "4164f685982a7d5b808c7da86f95a588bd66adf6723e1a242e031fad7af98fad",
+      "size": 12850831
+    },
+    {
+      "path": "docker/work/data/product.csv",
+      "sha256": "0ce1d0511185eef68e3dbfea86d0549f54e26cb5463143a18f6d6479d31ff92e",
+      "size": 349459
+    },
+    {
+      "path": "docker/work/data/receipt.csv",
+      "sha256": "beb7da5b6392e78e61c7e4cdd2f3c863ca4a0d26e04e1bfe367441d746d2961e",
+      "size": 6993080
+    },
+    {
+      "path": "docker/work/data/store.csv",
+      "sha256": "7448c67992e0bbdd48017a914b2242c27c08350bce9873c0c20d94e592728220",
+      "size": 9529
+    },
+    {
+      "path": "docker/db/init/1_init.sql",
+      "sha256": "fbcbc52793ed9f9cb4872308ff62099c7fed926cc17d2b2241df597f6571d9bd",
+      "size": 232
+    },
+    {
+      "path": "docker/db/init/2_create_table.sh",
+      "sha256": "fa717c85ad8685e5fe25c7f64230a095b406c4981ee9ec9ea1ffaed2f6ddf1ea",
+      "size": 2712
+    },
+    {
+      "path": "docker/db/init/3_load.sql",
+      "sha256": "d18c5d9913d6076b3ff431ba263437ce0876cb3ba1f5ee43fe0f3c533c78a76f",
+      "size": 460
+    }
+  ]
+}

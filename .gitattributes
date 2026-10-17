@@ -1,0 +1,11 @@
+# 既定: テキストはLFで保存（WindowsのCRLF変換によるDB初期化失敗を防ぐ）
+* text=auto eol=lf
+
+*.sh   text eol=lf
+*.sql  text eol=lf
+*.py   text eol=lf
+Dockerfile text eol=lf
+
+# 上流教材のスナップショットはバイト単位で保持（sha256で検証するため変換しない）
+upstream/** -text
+*.png  binary

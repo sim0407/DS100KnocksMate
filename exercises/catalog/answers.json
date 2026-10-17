@@ -1,0 +1,1597 @@
+{
+  "generated_by": "tools/extract_problems.py",
+  "source": {
+    "repository": "https://github.com/The-Japan-DataScientist-Society/100knocks-preprocess",
+    "commit": "81e637c5a9d003763dafbbabb91e070674342c2c",
+    "notebooks": {
+      "python": "docker/work/answer/ans_preprocess_knock_Python.ipynb",
+      "sql": "docker/work/answer/ans_preprocess_knock_SQL.ipynb"
+    }
+  },
+  "setup": {
+    "python": [
+      "import math  # noqa: F401\nimport os\n\nimport numpy as np  # noqa: F401\nimport pandas as pd\nfrom dateutil.relativedelta import relativedelta  # noqa: F401\nfrom imblearn.under_sampling import RandomUnderSampler  # noqa: F401\nfrom IPython.display import display  # noqa: F401\nfrom sklearn import preprocessing  # noqa: F401\nfrom sklearn.impute import SimpleImputer  # noqa: F401\nfrom sklearn.model_selection import TimeSeriesSplit  # noqa: F401\nfrom sklearn.model_selection import train_test_split  # noqa: F401\nfrom sqlalchemy import create_engine\n\nif \"PG_PORT\" in os.environ:\n\n    host = \"db\"\n    port = os.environ[\"PG_PORT\"]\n    database = os.environ[\"PG_DATABASE\"]\n    user = os.environ[\"PG_USER\"]\n    password = os.environ[\"PG_PASSWORD\"]\n\n    # pd.read_sql用のコネクタ\n    conn = create_engine(f\"postgresql://{user}:{password}@{host}:{port}/{database}\")\n\n    df_customer = pd.read_sql(sql=\"select * from customer\", con=conn)\n    df_category = pd.read_sql(sql=\"select * from category\", con=conn)\n    df_product = pd.read_sql(sql=\"select * from product\", con=conn)\n    df_receipt = pd.read_sql(sql=\"select * from receipt\", con=conn)\n    df_store = pd.read_sql(sql=\"select * from store\", con=conn)\n    df_geocode = pd.read_sql(sql=\"select * from geocode\", con=conn)\n\nelse:\n    if not os.path.exists(\"../data/\"):\n        !git clone https://github.com/The-Japan-DataScientist-Society/100knocks-preprocess\n        os.chdir(\"100knocks-preprocess/docker/work/answer\")\n\n    dtype = {\n        \"customer_id\": str,\n        \"gender_cd\": str,\n        \"postal_cd\": str,\n        \"application_store_cd\": str,\n        \"status_cd\": str,\n        \"category_major_cd\": str,\n        \"category_medium_cd\": str,\n        \"category_small_cd\": str,\n        \"product_cd\": str,\n        \"store_cd\": str,\n        \"prefecture_cd\": str,\n        \"tel_no\": str,\n        \"street\": str,\n    }\n\n    df_customer = pd.read_csv(\"../data/customer.csv\", encoding=\"utf-8-sig\", dtype=dtype)\n    df_category = pd.read_csv(\"../data/category.csv\", encoding=\"utf-8-sig\", dtype=dtype)\n    df_product = pd.read_csv(\"../data/product.csv\", encoding=\"utf-8-sig\", dtype=dtype)\n    df_receipt = pd.read_csv(\"../data/receipt.csv\", encoding=\"utf-8-sig\", dtype=dtype)\n    df_store = pd.read_csv(\"../data/store.csv\", encoding=\"utf-8-sig\", dtype=dtype)\n    df_geocode = pd.read_csv(\"../data/geocode.csv\", encoding=\"utf-8-sig\", dtype=dtype)"
+    ],
+    "sql": [
+      "%load_ext sql\nimport os  # noqa: E402\n\nfrom sqlalchemy import create_engine  # noqa: E402\n\npgconfig = {\n    \"host\": \"db\",\n    \"port\": os.environ[\"PG_PORT\"],\n    \"database\": os.environ[\"PG_DATABASE\"],\n    \"user\": os.environ[\"PG_USER\"],\n    \"password\": os.environ[\"PG_PASSWORD\"],\n}\ndsl = \"postgresql://{user}:{password}@{host}:{port}/{database}\".format(**pgconfig)\nconn = create_engine(dsl)\n\n# MagicコマンドでSQLを書くための設定\n%sql conn",
+      "%%sql\nSELECT 'このように実行できます' AS sample;"
+    ]
+  },
+  "answers": [
+    {
+      "id": "001",
+      "python": {
+        "code_cells": [
+          "df_receipt.head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    *\nFROM receipt\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "002",
+      "python": {
+        "code_cells": [
+          "df_receipt[[\"sales_ymd\", \"customer_id\", \"product_cd\", \"amount\"]].head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    sales_ymd,\n    customer_id,\n    product_cd,\n    amount\nFROM receipt\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "003",
+      "python": {
+        "code_cells": [
+          "df_receipt[[\"sales_ymd\", \"customer_id\", \"product_cd\", \"amount\"]].rename(\n    columns={\"sales_ymd\": \"sales_date\"}\n).head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    sales_ymd AS sales_date,\n    customer_id,\n    product_cd,\n    amount \nFROM receipt\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "004",
+      "python": {
+        "code_cells": [
+          "# コード例1（queryを使う場合）\ndf_receipt[[\"sales_ymd\", \"customer_id\", \"product_cd\", \"amount\"]].query(\n    'customer_id == \"CS018205000001\"'\n)",
+          "# コード例1（queryを使わない場合）\ndf = df_receipt[[\"sales_ymd\", \"customer_id\", \"product_cd\", \"amount\"]]\ndf[df[\"customer_id\"] == \"CS018205000001\"]"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    sales_ymd,\n    customer_id,\n    product_cd,\n    amount\nFROM\n    receipt\nWHERE\n    customer_id = 'CS018205000001'\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "005",
+      "python": {
+        "code_cells": [
+          "df_receipt[[\"sales_ymd\", \"customer_id\", \"product_cd\", \"amount\"]].query(\n    'customer_id == \"CS018205000001\" & amount >= 1000'\n)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    sales_ymd,\n    customer_id,\n    product_cd,\n    amount\nFROM\n    receipt\nWHERE\n    customer_id = 'CS018205000001'\n    AND amount >= 1000\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "006",
+      "python": {
+        "code_cells": [
+          "df_receipt[[\"sales_ymd\", \"customer_id\", \"product_cd\", \"quantity\", \"amount\"]].query(\n    'customer_id == \"CS018205000001\" & (amount >= 1000 | quantity >=5)'\n)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    sales_ymd,\n    customer_id,\n    product_cd,\n    quantity,\n    amount\nFROM\n    receipt\nWHERE\n    customer_id = 'CS018205000001'\n    AND\n    (\n        amount >= 1000\n        OR quantity >= 5\n    )\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "007",
+      "python": {
+        "code_cells": [
+          "df_receipt[[\"sales_ymd\", \"customer_id\", \"product_cd\", \"amount\"]].query(\n    'customer_id == \"CS018205000001\" & 1000 <= amount <= 2000'\n)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    sales_ymd,\n    customer_id,\n    product_cd,\n    amount\nFROM\n    receipt\nWHERE\n    customer_id = 'CS018205000001'\n    AND amount BETWEEN 1000 AND 2000\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "008",
+      "python": {
+        "code_cells": [
+          "df_receipt[[\"sales_ymd\", \"customer_id\", \"product_cd\", \"amount\"]].query(\n    'customer_id == \"CS018205000001\" & product_cd != \"P071401019\"'\n)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    sales_ymd,\n    customer_id,\n    product_cd, amount\nFROM\n    receipt\nWHERE\n    customer_id = 'CS018205000001'\n    AND product_cd != 'P071401019'\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "009",
+      "python": {
+        "code_cells": [
+          "df_store.query('prefecture_cd != \"13\" & floor_area <= 900')"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT * FROM store WHERE prefecture_cd != '13' AND floor_area <= 900;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "010",
+      "python": {
+        "code_cells": [
+          "df_store.query(\"store_cd.str.startswith('S14')\", engine=\"python\").head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    *\nFROM store\nWHERE\n    store_cd LIKE 'S14%'\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "011",
+      "python": {
+        "code_cells": [
+          "df_customer.query(\"customer_id.str.endswith('1')\", engine=\"python\").head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT * FROM customer WHERE customer_id LIKE '%1' LIMIT 10;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "012",
+      "python": {
+        "code_cells": [
+          "df_store.query(\"address.str.contains('横浜市')\", engine=\"python\")"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT * FROM store WHERE address LIKE '%横浜市%';"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "013",
+      "python": {
+        "code_cells": [
+          "df_customer.query(\"status_cd.str.contains(r'^[A-F]')\", engine=\"python\").head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT * FROM customer WHERE status_cd ~ '^[A-F]' LIMIT 10;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "014",
+      "python": {
+        "code_cells": [
+          "# regexのオプションをつけることもできる（Falseにすれば正規表現ではなくそのままの文字列として扱われる）\ndf_customer.query(\n    \"status_cd.str.contains(r'[1-9]$', regex=True)\", engine=\"python\"\n).head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT * FROM customer WHERE status_cd ~ '[1-9]$' LIMIT 10;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "015",
+      "python": {
+        "code_cells": [
+          "df_customer.query(\"status_cd.str.contains(r'^[A-F].*[1-9]$')\", engine=\"python\").head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT * FROM customer WHERE status_cd ~ '^[A-F].*[1-9]$' LIMIT 10;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "016",
+      "python": {
+        "code_cells": [
+          "df_store.query(\"tel_no.str.contains(r'^[0-9]{3}-[0-9]{3}-[0-9]{4}$')\", engine=\"python\")"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT * FROM store WHERE tel_no ~ '^[0-9]{3}-[0-9]{3}-[0-9]{4}$';"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "017",
+      "python": {
+        "code_cells": [
+          "df_customer.sort_values(\"birth_day\").head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT * FROM customer ORDER BY birth_day LIMIT 10;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "018",
+      "python": {
+        "code_cells": [
+          "df_customer.sort_values(\"birth_day\", ascending=False).head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT * FROM customer ORDER BY birth_day DESC LIMIT 10;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "019",
+      "python": {
+        "code_cells": [
+          "df_tmp = pd.concat(\n    [\n        df_receipt[[\"customer_id\", \"amount\"]],\n        df_receipt[\"amount\"].rank(method=\"min\", ascending=False),\n    ],\n    axis=1,\n)\n\ndf_tmp.columns = [\"customer_id\", \"amount\", \"ranking\"]\n\ndf_tmp.sort_values(\"ranking\").head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    customer_id,\n    amount,\n    RANK() OVER(ORDER BY amount DESC) AS ranking \nFROM receipt\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "020",
+      "python": {
+        "code_cells": [
+          "df_tmp = pd.concat(\n    [\n        df_receipt[[\"customer_id\", \"amount\"]],\n        df_receipt[\"amount\"].rank(method=\"first\", ascending=False),\n    ],\n    axis=1,\n)\n\ndf_tmp.columns = [\"customer_id\", \"amount\", \"ranking\"]\n\ndf_tmp.sort_values(\"ranking\").head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    customer_id,\n    amount,\n    ROW_NUMBER() OVER(ORDER BY amount DESC) AS ranking \nFROM receipt\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "021",
+      "python": {
+        "code_cells": [
+          "len(df_receipt)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "-- コード例1\nSELECT COUNT(1) FROM receipt;",
+          "-- コード例2（*でもOK）\nSELECT COUNT(*) FROM receipt;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "022",
+      "python": {
+        "code_cells": [
+          "len(df_receipt[\"customer_id\"].unique())"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    COUNT(DISTINCT customer_id)\nFROM receipt\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "023",
+      "python": {
+        "code_cells": [
+          "# コード例1\ndf_receipt.groupby(\"store_cd\").agg({\"amount\": \"sum\", \"quantity\": \"sum\"}).reset_index()",
+          "# コード例2\ndf_receipt.groupby(\"store_cd\")[[\"amount\", \"quantity\"]].agg(\"sum\").reset_index()"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT store_cd\n    , SUM(amount) AS amount\n    , SUM(quantity) AS quantity\nFROM receipt\ngroup by store_cd\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "024",
+      "python": {
+        "code_cells": [
+          "df_receipt.groupby(\"customer_id\").agg({\"sales_ymd\": \"max\"}).reset_index().head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    customer_id,\n    MAX(sales_ymd)\nFROM receipt\nGROUP BY customer_id\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "025",
+      "python": {
+        "code_cells": [
+          "# 024と同じ書き方もできるがあえて違う書き方で解答例を紹介\ndf_receipt.groupby(\"customer_id\").sales_ymd.min().reset_index().head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    customer_id,\n    MIN(sales_ymd)\nFROM receipt\nGROUP BY customer_id\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "026",
+      "python": {
+        "code_cells": [
+          "df_tmp = (\n    df_receipt.groupby(\"customer_id\").agg({\"sales_ymd\": [\"max\", \"min\"]}).reset_index()\n)\n\n# マルチインデックス（項目）の階層を\"_\"でつなぎながら1階層のインデックス（項目）にする\n# df_tmp.columns = ['customer_id', 'sales_ymd_max', 'sales_ymd_min'] としても良い\ndf_tmp.columns = [\"_\".join(pair) for pair in df_tmp.columns]\n\ndf_tmp.query(\"sales_ymd_max != sales_ymd_min\").head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    customer_id,\n    MAX(sales_ymd),\n    MIN(sales_ymd)\nFROM receipt\nGROUP BY customer_id\nHAVING MAX(sales_ymd) != MIN(sales_ymd)\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "027",
+      "python": {
+        "code_cells": [
+          "df_receipt.groupby(\"store_cd\").agg({\"amount\": \"mean\"}).reset_index().sort_values(\n    \"amount\", ascending=False\n).head(5)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    store_cd,\n    AVG(amount) AS avg_amount\nFROM receipt\nGROUP BY store_cd\nORDER BY avg_amount DESC\nLIMIT 5\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "028",
+      "python": {
+        "code_cells": [
+          "df_receipt.groupby(\"store_cd\").agg({\"amount\": \"median\"}).reset_index().sort_values(\n    \"amount\", ascending=False\n).head(5)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT \n    store_cd, \n    PERCENTILE_CONT(0.5) WITHIN GROUP(ORDER BY amount) AS amount_50per\nFROM receipt\nGROUP BY store_cd\nORDER BY amount_50per DESC\nLIMIT 5\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "029",
+      "python": {
+        "code_cells": [
+          "df_receipt.groupby(\"store_cd\").product_cd.apply(lambda x: x.mode()).reset_index().head(\n    10\n)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "-- コード例1: window関数や分析関数で最頻値を集計する\nWITH product_cnt AS (\n    SELECT\n        store_cd,\n        product_cd,\n        COUNT(1) AS mode_cnt\n    FROM receipt\n    GROUP BY\n        store_cd,\n        product_cd\n),\nproduct_mode AS (\n    SELECT\n        store_cd,\n        product_cd,\n        mode_cnt,\n        RANK() OVER(PARTITION BY store_cd ORDER BY mode_cnt DESC) AS rnk\n    FROM product_cnt\n)\nSELECT\n    store_cd,\n    product_cd,\n    mode_cnt\nFROM product_mode\nWHERE\n    rnk = 1\nORDER BY\n    store_cd,\n    product_cd\nLIMIT 10\n;",
+          "-- コード例2: MODE()を使う簡易ケース（早いが最頻値が複数の場合は一つだけ選ばれる）\nSELECT\n    store_cd,\n    MODE() WITHIN GROUP(ORDER BY product_cd)\nFROM receipt\nGROUP BY store_cd\nORDER BY store_cd\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "030",
+      "python": {
+        "code_cells": [
+          "df_receipt.groupby(\"store_cd\").amount.var(ddof=0).reset_index().sort_values(\n    \"amount\", ascending=False\n).head(5)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    store_cd,\n    VAR_POP(amount) AS vars_amount\nFROM receipt\nGROUP BY store_cd\nORDER BY vars_amount DESC \nLIMIT 5\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "031",
+      "python": {
+        "code_cells": [
+          "df_receipt.groupby(\"store_cd\").amount.std(ddof=0).reset_index().sort_values(\n    \"amount\", ascending=False\n).head(5)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    store_cd,\n    STDDEV_POP(amount) as stds_amount\nFROM receipt\nGROUP BY store_cd\nORDER BY stds_amount DESC\nLIMIT 5\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "032",
+      "python": {
+        "code_cells": [
+          "# コード例1\nnp.percentile(df_receipt[\"amount\"], q=np.arange(1, 5) * 25)",
+          "# コード例2\ndf_receipt.amount.quantile(q=np.arange(1, 5) / 4)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    PERCENTILE_CONT(0.25) WITHIN GROUP(ORDER BY amount) AS amount_25per,\n    PERCENTILE_CONT(0.50) WITHIN GROUP(ORDER BY amount) AS amount_50per,\n    PERCENTILE_CONT(0.75) WITHIN GROUP(ORDER BY amount) AS amount_75per,\n    PERCENTILE_CONT(1.0) WITHIN GROUP(ORDER BY amount) AS amount_100per\nFROM receipt\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "033",
+      "python": {
+        "code_cells": [
+          "df_receipt.groupby(\"store_cd\").amount.mean().reset_index().query(\"amount >= 330\")"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    store_cd,\n    AVG(amount) AS avg_amount\nFROM receipt\nGROUP BY store_cd\nHAVING\n    AVG(amount) >= 330\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "034",
+      "python": {
+        "code_cells": [
+          "# コード例1: queryを使わない書き方\ndf_receipt[~df_receipt[\"customer_id\"].str.startswith(\"Z\")].groupby(\n    \"customer_id\"\n).amount.sum().mean()",
+          "# コード例2: queryを使う書き方\ndf_receipt.query('not customer_id.str.startswith(\"Z\")', engine=\"python\").groupby(\n    \"customer_id\"\n).amount.sum().mean()"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "WITH customer_amount AS (\n    SELECT\n        customer_id,\n        SUM(amount) AS sum_amount\n    FROM receipt\n    WHERE\n        customer_id NOT LIKE 'Z%'\n    GROUP BY customer_id\n)\nSELECT\n    AVG(sum_amount)\nFROM customer_amount\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "035",
+      "python": {
+        "code_cells": [
+          "df_amount_sum = (\n    df_receipt[~df_receipt[\"customer_id\"].str.startswith(\"Z\")]\n    .groupby(\"customer_id\")\n    .amount.sum()\n)\n\namount_mean = df_amount_sum.mean()\n\ndf_amount_sum = df_amount_sum.reset_index()\n\ndf_amount_sum[df_amount_sum[\"amount\"] >= amount_mean].head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "WITH customer_amount AS (\n    SELECT\n        customer_id,\n        SUM(amount) AS sum_amount\n    FROM receipt\n    WHERE\n        customer_id NOT LIKE 'Z%'\n    GROUP BY customer_id\n)\nSELECT\n    customer_id,\n    sum_amount\nFROM customer_amount\nWHERE\n    sum_amount >= (\n        SELECT\n            AVG(sum_amount)\n        FROM customer_amount\n    )\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "036",
+      "python": {
+        "code_cells": [
+          "pd.merge(\n    df_receipt, df_store[[\"store_cd\", \"store_name\"]], how=\"inner\", on=\"store_cd\"\n).head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    r.*,\n    s.store_name\nFROM receipt r\nJOIN store s\nON\n    r.store_cd = s.store_cd\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "037",
+      "python": {
+        "code_cells": [
+          "pd.merge(\n    df_product,\n    df_category[[\"category_small_cd\", \"category_small_name\"]],\n    how=\"inner\",\n    on=\"category_small_cd\",\n).head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    p.*,\n    c.category_small_name\nFROM product p\nJOIN category c\nON\n    p.category_small_cd = c.category_small_cd\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "038",
+      "python": {
+        "code_cells": [
+          "df_amount_sum = df_receipt.groupby(\"customer_id\").amount.sum().reset_index()\n\ndf_tmp = df_customer.query(\n    'gender_cd == \"1\" and not customer_id.str.startswith(\"Z\")', engine=\"python\"\n)\n\npd.merge(df_tmp[\"customer_id\"], df_amount_sum, how=\"left\", on=\"customer_id\").fillna(\n    0\n).head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "WITH customer_amount AS (\n    SELECT\n        customer_id,\n        SUM(amount) AS sum_amount\n    FROM receipt\n    GROUP BY\n        customer_id\n),\ncustomer_data AS (\n    SELECT\n        customer_id\n    FROM customer\n    WHERE\n        gender_cd = '1'\n        AND customer_id NOT LIKE 'Z%'\n)\nSELECT\n    c.customer_id,\n    COALESCE(a.sum_amount, 0)\nFROM customer_data c\nLEFT OUTER JOIN customer_amount a\nON\n    c.customer_id = a.customer_id\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "039",
+      "python": {
+        "code_cells": [
+          "df_data = df_receipt.query('not customer_id.str.startswith(\"Z\")', engine=\"python\")\n\ndf_cnt = (\n    df_data[~df_data.duplicated(subset=[\"customer_id\", \"sales_ymd\"])]\n    .groupby(\"customer_id\")\n    .sales_ymd.count()\n    .reset_index()\n    .sort_values(\"sales_ymd\", ascending=False)\n    .head(20)\n)\n\ndf_sum = (\n    df_data.groupby(\"customer_id\")\n    .amount.sum()\n    .reset_index()\n    .sort_values(\"amount\", ascending=False)\n    .head(20)\n)\n\npd.merge(df_cnt, df_sum, how=\"outer\", on=\"customer_id\")"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "WITH customer_data AS (\n    select\n        customer_id,\n        sales_ymd,\n        amount\n    FROM receipt\n    WHERE\n        customer_id NOT LIKE 'Z%'\n),\ncustomer_days AS (\n    select\n        customer_id,\n        COUNT(DISTINCT sales_ymd) come_days\n    FROM customer_data\n    GROUP BY\n        customer_id\n    ORDER BY\n        come_days DESC\n    LIMIT 20\n),\ncustomer_amount AS (\n    SELECT\n        customer_id,\n        SUM(amount) buy_amount\n    FROM customer_data\n    GROUP BY\n        customer_id\n    ORDER BY\n        buy_amount DESC\n    LIMIT 20\n)\nSELECT\n    COALESCE(d.customer_id, a.customer_id) customer_id,\n    d.come_days,\n    a.buy_amount\nFROM customer_days d\nFULL OUTER JOIN customer_amount a\nON\n    d.customer_id = a.customer_id\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "040",
+      "python": {
+        "code_cells": [
+          "df_store_tmp = df_store.copy()\ndf_product_tmp = df_product.copy()\n\ndf_store_tmp[\"key\"] = 0\ndf_product_tmp[\"key\"] = 0\n\nlen(pd.merge(df_store_tmp, df_product_tmp, how=\"outer\", on=\"key\"))"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    COUNT(1)\nFROM store\nCROSS JOIN product\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "041",
+      "python": {
+        "code_cells": [
+          "df_sales_amount_by_date = (\n    df_receipt[[\"sales_ymd\", \"amount\"]].groupby(\"sales_ymd\").sum().reset_index()\n)\n\ndf_sales_amount_by_date = pd.concat(\n    [df_sales_amount_by_date, df_sales_amount_by_date.shift()], axis=1\n)\n\ndf_sales_amount_by_date.columns = [\"sales_ymd\", \"amount\", \"lag_ymd\", \"lag_amount\"]\n\ndf_sales_amount_by_date[\"diff_amount\"] = (\n    df_sales_amount_by_date[\"amount\"] - df_sales_amount_by_date[\"lag_amount\"]\n)\n\ndf_sales_amount_by_date.head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "WITH sales_amount_by_date AS (\n    SELECT\n        sales_ymd,\n        SUM(amount) AS amount\n    FROM receipt\n    GROUP BY\n        sales_ymd\n),\nsales_amount_by_date_with_lag as (\n    SELECT\n        sales_ymd,\n        LAG(sales_ymd, 1) OVER(ORDER BY sales_ymd) lag_ymd,\n        amount,\n        LAG(amount, 1) OVER(ORDER BY sales_ymd) AS lag_amount\n    FROM sales_amount_by_date\n)\nSELECT\n    sales_ymd,\n    amount,\n    lag_ymd,\n    lag_amount,\n    amount - lag_amount AS diff_amount\nFROM sales_amount_by_date_with_lag\nORDER BY\n    sales_ymd\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "042",
+      "python": {
+        "code_cells": [
+          "# コード例1:縦持ちケース\ndf_sales_amount_by_date = (\n    df_receipt[[\"sales_ymd\", \"amount\"]].groupby(\"sales_ymd\").sum().reset_index()\n)\n\nfor i in range(1, 4):\n    df_tmp = pd.concat(\n        [df_sales_amount_by_date, df_sales_amount_by_date.shift(i)], axis=1\n    )\n    if i == 1:\n        df_lag = df_tmp\n    else:\n        # DataFrameでappendが削除されるためappend -> concatに変更\n        df_lag = pd.concat([df_lag, df_tmp], axis=0)\n\ndf_lag.columns = [\"sales_ymd\", \"amount\", \"lag_ymd\", \"lag_amount\"]\n\ndf_lag.dropna().astype(int).sort_values([\"sales_ymd\", \"lag_ymd\"]).head(10)",
+          "# コード例2:横持ちケース\ndf_sales_amount_by_date = (\n    df_receipt[[\"sales_ymd\", \"amount\"]].groupby(\"sales_ymd\").sum().reset_index()\n)\n\ndf_lag = df_sales_amount_by_date\n\nfor i in range(1, 4):\n    df_lag = pd.concat([df_lag, df_sales_amount_by_date.shift(i)], axis=1)\n    columns = [f\"lag_ymd_{i}\", f\"lag_amount_{i}\"]\n    df_lag.columns = list(df_lag.columns)[: -len(columns)] + columns\n\ndf_lag.dropna().astype(int).sort_values([\"sales_ymd\"]).head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "-- コード例1:縦持ちケース\nWITH sales_amount_by_date AS (\n    SELECT\n        sales_ymd,\n        SUM(amount) AS amount\n    FROM receipt\n    GROUP BY\n        sales_ymd\n),\nsales_amount_lag_date AS (\n    SELECT\n        sales_ymd,\n        LAG(sales_ymd, 3) OVER (ORDER BY sales_ymd) AS lag_date_3,\n        amount\n    FROM sales_amount_by_date\n)\nSELECT\n    a.sales_ymd,\n    a.amount,\n    b.sales_ymd AS lag_ymd,\n    b.amount AS lag_amount\nFROM sales_amount_lag_date a\nJOIN sales_amount_lag_date b\nON\n    (\n        a.lag_date_3 IS NULL\n        OR a.lag_date_3 <= b.sales_ymd\n    )\n    AND b.sales_ymd < a.sales_ymd\nORDER BY\n    sales_ymd,\n    lag_ymd\nLIMIT 10\n;",
+          "-- コード例2:横持ちケース\nWITH sales_amount_by_date AS (\n    SELECT\n        sales_ymd,\n        SUM(amount) AS amount\n    FROM receipt\n    GROUP BY\n        sales_ymd\n),\nsales_amount_with_lag AS (\n    SELECT\n        sales_ymd,\n        amount, \n        LAG(sales_ymd, 1) OVER (ORDER BY sales_ymd) AS lag_ymd_1,\n        LAG(amount, 1) OVER (ORDER BY sales_ymd) AS lag_amount_1,\n        LAG(sales_ymd, 2) OVER (ORDER BY sales_ymd) AS lag_ymd_2,\n        LAG(amount, 2) OVER (ORDER BY sales_ymd) AS lag_amount_2,\n        LAG(sales_ymd, 3) OVER (ORDER BY sales_ymd) AS lag_ymd_3,\n        LAG(amount, 3) OVER (ORDER BY sales_ymd) AS lag_amount_3\n    FROM sales_amount_by_date\n)\nSELECT\n    sales_ymd,\n    amount, \n    lag_ymd_1,\n    lag_amount_1,\n    lag_ymd_2,\n    lag_amount_2,\n    lag_ymd_3,\n    lag_amount_3\nFROM sales_amount_with_lag\nWHERE\n    lag_ymd_3 IS NOT NULL\nORDER BY\n    sales_ymd\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "043",
+      "python": {
+        "code_cells": [
+          "# コード例1\ndf_tmp = pd.merge(df_receipt, df_customer, how=\"inner\", on=\"customer_id\")\n\ndf_tmp[\"era\"] = df_tmp[\"age\"].apply(lambda x: math.floor(x / 10) * 10)\n\ndf_sales_summary = pd.pivot_table(\n    df_tmp, index=\"era\", columns=\"gender_cd\", values=\"amount\", aggfunc=\"sum\"\n).reset_index()\n\ndf_sales_summary.columns = [\"era\", \"male\", \"female\", \"unknown\"]\n\ndf_sales_summary",
+          "# コード例2\ndf_tmp = pd.merge(df_receipt, df_customer, how=\"inner\", on=\"customer_id\")\n\ndf_tmp[\"era\"] = np.floor(df_tmp[\"age\"] / 10).astype(int) * 10\n\ndf_sales_summary = pd.pivot_table(\n    df_tmp, index=\"era\", columns=\"gender_cd\", values=\"amount\", aggfunc=\"sum\"\n).reset_index()\n\ndf_sales_summary.columns = [\"era\", \"male\", \"female\", \"unknown\"]\n\ndf_sales_summary"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "DROP TABLE IF EXISTS sales_summary;\n\nCREATE TABLE sales_summary AS\n    WITH gender_era_amount AS (\n        SELECT\n            TRUNC(age / 10) * 10 AS era,\n            c.gender_cd,\n            SUM(r.amount) AS amount\n        FROM customer c\n        JOIN receipt r\n        ON\n            c.customer_id = r.customer_id\n        GROUP BY\n            era,\n            c.gender_cd\n    )\n    SELECT\n        era,\n        SUM(CASE WHEN gender_cd = '0' THEN amount END) AS male,\n        SUM(CASE WHEN gender_cd = '1' THEN amount END) AS female,\n        SUM(CASE WHEN gender_cd = '9' THEN amount END) AS unknown\n    FROM gender_era_amount\n    GROUP BY\n        era\n    ORDER BY\n        era\n;\n\nSELECT\n    *\nFROM sales_summary\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "044",
+      "python": {
+        "code_cells": [
+          "df_sales_summary.set_index(\"era\").stack().reset_index().replace(\n    {\"female\": \"01\", \"male\": \"00\", \"unknown\": \"99\"}\n).rename(columns={\"level_1\": \"gender_cd\", 0: \"amount\"})"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "-- SQL向きではないため、やや強引に記載する（カテゴリ数が多いときはとても長いSQLとなってしまう点に注意）\nSELECT era, '00' AS gender_cd , male AS amount FROM sales_summary\nUNION ALL\nSELECT era, '01' AS gender_cd, female AS amount FROM sales_summary\nUNION ALL\nSELECT era, '99' AS gender_cd, unknown AS amount FROM sales_summary\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "045",
+      "python": {
+        "code_cells": [
+          "# 以下の書き方でYYYYMMDD形式の文字列に変換できる\n# pd.to_datetime(df_customer['birth_day']).dt.strftime('%Y%m%d')\n\npd.concat(\n    [\n        df_customer[\"customer_id\"],\n        pd.to_datetime(df_customer[\"birth_day\"]).dt.strftime(\"%Y%m%d\"),\n    ],\n    axis=1,\n).head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    customer_id, \n    TO_CHAR(birth_day, 'YYYYMMDD') AS birth_day\nFROM customer \nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "046",
+      "python": {
+        "code_cells": [
+          "pd.concat(\n    [df_customer[\"customer_id\"], pd.to_datetime(df_customer[\"application_date\"])],\n    axis=1,\n).head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    customer_id,\n    TO_DATE(application_date, 'YYYYMMDD') AS application_date\nFROM customer\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "047",
+      "python": {
+        "code_cells": [
+          "pd.concat(\n    [\n        df_receipt[[\"receipt_no\", \"receipt_sub_no\"]],\n        pd.to_datetime(df_receipt[\"sales_ymd\"].astype(\"str\")),\n    ],\n    axis=1,\n).head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT  \n    receipt_no, \n    receipt_sub_no,\n    TO_DATE(CAST(sales_ymd AS VARCHAR), 'YYYYMMDD') AS sales_ymd\nFROM receipt \nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "048",
+      "python": {
+        "code_cells": [
+          "pd.concat(\n    [\n        df_receipt[[\"receipt_no\", \"receipt_sub_no\"]],\n        pd.to_datetime(df_receipt[\"sales_epoch\"], unit=\"s\").rename(\"sales_ymd\"),\n    ],\n    axis=1,\n).head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT \n    receipt_no,\n    receipt_sub_no,\n    CAST(TO_TIMESTAMP(sales_epoch) AS DATE) AS sales_ymd\nFROM receipt \nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "049",
+      "python": {
+        "code_cells": [
+          "pd.concat(\n    [\n        df_receipt[[\"receipt_no\", \"receipt_sub_no\"]],\n        pd.to_datetime(df_receipt[\"sales_epoch\"], unit=\"s\").dt.year.rename(\n            \"sales_year\"\n        ),\n    ],\n    axis=1,\n).head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT \n    receipt_no, \n    receipt_sub_no,\n    EXTRACT(YEAR FROM TO_TIMESTAMP(sales_epoch)) AS sales_year\nFROM receipt \nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "050",
+      "python": {
+        "code_cells": [
+          "# dt.monthでも月を取得できるが、ここでは0埋め２桁で取り出すためstrftimeを利用している\ndf_datetime = pd.to_datetime(df_receipt[\"sales_epoch\"], unit=\"s\").rename(\"sales_month\")\n\npd.concat(\n    [df_receipt[[\"receipt_no\", \"receipt_sub_no\"]], df_datetime.dt.strftime(\"%m\")],\n    axis=1,\n).head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT \n    receipt_no, \n    receipt_sub_no,\n    TO_CHAR(\n        EXTRACT(MONTH FROM TO_TIMESTAMP(sales_epoch)), \n        'FM00'\n    ) AS sales_month\nFROM receipt\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "051",
+      "python": {
+        "code_cells": [
+          "# dt.dayでも日を取得できるが、ここでは0埋め２桁で取り出すためstrftimeを利用している\ndf_datetime = pd.to_datetime(df_receipt[\"sales_epoch\"], unit=\"s\").rename(\"sales_day\")\n\npd.concat(\n    [df_receipt[[\"receipt_no\", \"receipt_sub_no\"]], df_datetime.dt.strftime(\"%d\")],\n    axis=1,\n).head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT \n    receipt_no, receipt_sub_no,\n    TO_CHAR(EXTRACT(DAY FROM TO_TIMESTAMP(sales_epoch)), 'FM00') AS sales_day\nFROM receipt LIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "052",
+      "python": {
+        "code_cells": [
+          "# コード例1\ndf_sales_amount = df_receipt.query(\n    'not customer_id.str.startswith(\"Z\")', engine=\"python\"\n)\n\ndf_sales_amount = (\n    df_sales_amount[[\"customer_id\", \"amount\"]]\n    .groupby(\"customer_id\")\n    .sum()\n    .reset_index()\n)\n\ndf_sales_amount[\"sales_flg\"] = df_sales_amount[\"amount\"].apply(\n    lambda x: 1 if x > 2000 else 0\n)\n\ndf_sales_amount.head(10)",
+          "# コード例2（np.whereの活用）\ndf_sales_amount = df_receipt.query(\n    'not customer_id.str.startswith(\"Z\")', engine=\"python\"\n)\n\ndf_sales_amount = (\n    df_sales_amount[[\"customer_id\", \"amount\"]]\n    .groupby(\"customer_id\")\n    .sum()\n    .reset_index()\n)\n\ndf_sales_amount[\"sales_flg\"] = np.where(df_sales_amount[\"amount\"] > 2000, 1, 0)\n\ndf_sales_amount.head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    customer_id,\n    SUM(amount) AS sum_amount,\n    CASE\n        WHEN SUM(amount) > 2000 THEN 1\n        ELSE 0\n    END AS sales_flg\nFROM receipt\nWHERE customer_id NOT LIKE 'Z%'\nGROUP BY customer_id\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "053",
+      "python": {
+        "code_cells": [
+          "# コード例1\ndf_tmp = df_customer[[\"customer_id\", \"postal_cd\"]].copy()\n\ndf_tmp[\"postal_flg\"] = df_tmp[\"postal_cd\"].apply(\n    lambda x: 1 if 100 <= int(x[0:3]) <= 209 else 0\n)\n\npd.merge(df_tmp, df_receipt, how=\"inner\", on=\"customer_id\").groupby(\"postal_flg\").agg(\n    {\"customer_id\": \"nunique\"}\n)",
+          "# コード例2（np.where、betweenの活用）\ndf_tmp = df_customer[[\"customer_id\", \"postal_cd\"]].copy()\n\ndf_tmp[\"postal_flg\"] = np.where(\n    df_tmp[\"postal_cd\"].str[0:3].astype(int).between(100, 209), 1, 0\n)\n\npd.merge(df_tmp, df_receipt, how=\"inner\", on=\"customer_id\").groupby(\"postal_flg\").agg(\n    {\"customer_id\": \"nunique\"}\n)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "WITH cust AS (\n    SELECT\n        customer_id,\n        postal_cd,\n        CASE\n            WHEN CAST(SUBSTR(postal_cd, 1, 3) AS INTEGER) BETWEEN 100 AND 209 THEN 1\n            ELSE 0\n        END AS postal_flg\n    FROM\n        customer\n),\nrect AS(\n    SELECT DISTINCT\n        customer_id\n    FROM\n        receipt\n)\nSELECT \n    c.postal_flg, \n    COUNT(DISTINCT c.customer_id) AS customer_cnt\nFROM\n    cust c\nJOIN\n    rect r\nUSING (customer_id)\nGROUP BY\n    c.postal_flg\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "054",
+      "python": {
+        "code_cells": [
+          "# コード例1（固定で切り出す）\ndf_customer_tmp = df_customer[[\"customer_id\", \"address\"]].copy()\n\ndf_customer_tmp[\"prefecture_cd\"] = (\n    df_customer[\"address\"]\n    .str[0:3]\n    .map({\"埼玉県\": \"11\", \"千葉県\": \"12\", \"東京都\": \"13\", \"神奈川\": \"14\"})\n)\n\ndf_customer_tmp.head(10)",
+          "# コード例2（正規表現を使う）\ndf_customer_tmp = df_customer[[\"customer_id\", \"address\"]].copy()\n\ndf_customer_tmp[\"prefecture_cd\"] = (\n    df_customer[\"address\"]\n    .str.extract(r\"(^.*?[都道府県])\")[0]\n    .map({\"埼玉県\": \"11\", \"千葉県\": \"12\", \"東京都\": \"13\", \"神奈川県\": \"14\"})\n)\n\ndf_customer_tmp.head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "-- SQL向きではないため、やや強引に記載する（カテゴリ数が多いときはとても長いSQLとなってしまう点に注意）\n-- コード例1（固定で切り出す）\nSELECT\n    customer_id,\n    address,\n    CASE SUBSTR(address,1, 3)\n        WHEN '埼玉県' THEN '11'\n        WHEN '千葉県' THEN '12'\n        WHEN '東京都' THEN '13'\n        WHEN '神奈川' THEN '14'\n    END AS prefecture_cd\nFROM\n    customer\nLIMIT 10\n;",
+          "-- コード例2（正規表現を使う）\nSELECT\n    customer_id,\n    address,\n    CASE SUBSTRING(address, '^.*?[都道府県]')\n        WHEN '埼玉県' THEN '11'\n        WHEN '千葉県' THEN '12'\n        WHEN '東京都' THEN '13'\n        WHEN '神奈川県' THEN '14'\n    END AS prefecture_cd\nFROM\n    customer\nLIMIT 10\n;",
+          "-- コード例3（LIKEを使う）\nSELECT\n    customer_id,\n    address,\n    CASE\n        WHEN address LIKE '埼玉県%' THEN '11'\n        WHEN address LIKE '千葉県%' THEN '12'\n        WHEN address LIKE '東京都%' THEN '13'\n        WHEN address LIKE '神奈川県%' THEN '14'\n    END AS prefecture_cd\nFROM\n    customer\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "055",
+      "python": {
+        "code_cells": [
+          "# コード例1\ndf_sales_amount = (\n    df_receipt[[\"customer_id\", \"amount\"]].groupby(\"customer_id\").sum().reset_index()\n)\n\npct25 = np.quantile(df_sales_amount[\"amount\"], 0.25)\npct50 = np.quantile(df_sales_amount[\"amount\"], 0.5)\npct75 = np.quantile(df_sales_amount[\"amount\"], 0.75)\n\n\ndef pct_group(x):\n    if x < pct25:\n        return 1\n    if pct25 <= x < pct50:\n        return 2\n    if pct50 <= x < pct75:\n        return 3\n    return 4\n\n\ndf_sales_amount[\"pct_group\"] = df_sales_amount[\"amount\"].apply(pct_group)\n\ndf_sales_amount.head(10)",
+          "# 確認用コード\nprint(\"pct25:\", pct25)\nprint(\"pct50:\", pct50)\nprint(\"pct75:\", pct75)",
+          "# コード例2（cutを使った例、四分位範囲も参考までに追加表示）\ndf_temp = (\n    df_receipt[[\"customer_id\", \"amount\"]].groupby(\"customer_id\").sum().reset_index()\n)\n\npct25 = np.quantile(df_sales_amount[\"amount\"], 0.25)\npct50 = np.quantile(df_sales_amount[\"amount\"], 0.5)\npct75 = np.quantile(df_sales_amount[\"amount\"], 0.75)\npct_max = df_sales_amount[\"amount\"].max()\n\ndf_temp[\"quantile\"] = pd.cut(\n    df_sales_amount[\"amount\"], [0.0, pct25, pct50, pct75, pct_max + 0.1], right=False\n)\n\ndf_temp[\"pct_group\"] = df_temp.groupby(\"quantile\").ngroup() + 1\n\ndf_temp.head(10)",
+          "# 参考コード（qcutを使った例、境界値の含む／含まないが逆になっており題意を満たさないが参考までに記載）\ndf_temp = df_receipt.groupby(\"customer_id\")[[\"amount\"]].sum()\n\ndf_temp[\"quantile\"], bins = pd.qcut(\n    df_receipt.groupby(\"customer_id\")[\"amount\"].sum(), 4, retbins=True\n)\n\ndf_temp[\"pct_group\"] = df_temp.groupby(\"quantile\").ngroup() + 1\n\ndf_temp.reset_index(inplace=True)\n\ndisplay(df_temp.head(10))\n\nprint(\"quantiles:\", bins)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "WITH sales_amount AS(\n    SELECT\n        customer_id,\n        SUM(amount) AS sum_amount\n    FROM\n        receipt\n    GROUP BY\n        customer_id\n),\nsales_pct AS (\n    SELECT\n        PERCENTILE_CONT(0.25) WITHIN GROUP(ORDER BY sum_amount) AS pct25,\n        PERCENTILE_CONT(0.50) WITHIN GROUP(ORDER BY sum_amount) AS pct50,\n        PERCENTILE_CONT(0.75) WITHIN GROUP(ORDER BY sum_amount) AS pct75\n    FROM\n        sales_amount\n)\nSELECT\n    a.customer_id,\n    a.sum_amount,\n    CASE\n        WHEN a.sum_amount < pct25 THEN 1\n        WHEN pct25 <= a.sum_amount AND a.sum_amount < pct50 THEN 2\n        WHEN pct50 <= a.sum_amount AND a.sum_amount < pct75 THEN 3\n        WHEN pct75 <= a.sum_amount THEN 4\n    END AS pct_group\nFROM sales_amount a\nCROSS JOIN sales_pct p\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "056",
+      "python": {
+        "code_cells": [
+          "# コード例1\ndf_customer_era = df_customer[[\"customer_id\", \"birth_day\"]].copy()\n\ndf_customer_era[\"era\"] = df_customer[\"age\"].apply(\n    lambda x: min(math.floor(x / 10) * 10, 60)\n)\n\ndf_customer_era.head(10)",
+          "# コード例2（cutの例、カテゴリは範囲で出力）\ndf_customer_era = df_customer[[\"customer_id\", \"birth_day\"]].copy()\n\ndf_customer_era[\"era\"] = pd.cut(\n    df_customer[\"age\"], bins=[0, 10, 20, 30, 40, 50, 60, np.inf], right=False\n)\n\ndf_customer_era[[\"customer_id\", \"birth_day\", \"era\"]].head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    customer_id,\n    birth_day,\n    -- 確認用の項目\n    -- age,\n    LEAST(CAST(TRUNC(age / 10) * 10 AS INTEGER), 60) AS era\nFROM\n    customer\nGROUP BY\n    customer_id,\n    birth_day\n-- 確認用の条件\n-- HAVING LEAST(CAST(TRUNC(age / 10) * 10 AS INTEGER), 60) >= 60\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "057",
+      "python": {
+        "code_cells": [
+          "# 性別コード１桁と年代コード２桁を連結した性年代コードを生成する\n\ndf_customer_era = df_customer[[\"customer_id\", \"birth_day\"]].copy()\n\ndf_customer_era[\"era\"] = df_customer[\"age\"].apply(\n    lambda x: min(math.floor(x / 10) * 10, 60)\n)\n\ndf_customer_era[\"gender_era\"] = df_customer[\"gender_cd\"] + df_customer_era[\n    \"era\"\n].astype(\"str\").str.zfill(2)\n\ndf_customer_era.head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "-- 性別コード１桁と年代コード２桁を連結した性年代コードを生成する\nSELECT\n    customer_id,\n    birth_day,\n    gender_cd || TO_CHAR(LEAST(CAST(TRUNC(age / 10) * 10 AS INTEGER), 60), 'FM00') AS gender_era\nFROM\n    customer\nGROUP BY\n    customer_id,\n    birth_day\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "058",
+      "python": {
+        "code_cells": [
+          "# コード例1（すべてのコード値を項目化）\npd.get_dummies(df_customer[[\"customer_id\", \"gender_cd\"]], columns=[\"gender_cd\"]).head(\n    10\n)",
+          "# コード例2（項目を一つ削ったり区切り文字を変えたりできる）\npd.get_dummies(\n    df_customer[[\"customer_id\", \"gender_cd\"]],\n    columns=[\"gender_cd\"],\n    drop_first=True,\n    prefix=\"gen\",\n    prefix_sep=\"#\",\n).head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "-- カテゴリ数が多いときはとても長いSQLとなってしまう点に注意\n-- カテゴリを一つ減らしたい場合はCASE文をどれか一つ削ればOK\nSELECT\n    customer_id,\n    CASE WHEN gender_cd = '0' THEN '1' ELSE '0' END AS gender_cd_0,\n    CASE WHEN gender_cd = '1' THEN '1' ELSE '0' END AS gender_cd_1,\n    CASE WHEN gender_cd = '9' THEN '1' ELSE '0' END AS gender_cd_9\nFROM\n    customer\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "059",
+      "python": {
+        "code_cells": [
+          "# skleanのpreprocessing.scaleを利用するため、データの標準偏差で計算されている\ndf_sales_amount = (\n    df_receipt.query('not customer_id.str.startswith(\"Z\")', engine=\"python\")\n    .groupby(\"customer_id\")\n    .agg({\"amount\": \"sum\"})\n    .reset_index()\n)\n\ndf_sales_amount[\"std_amount\"] = preprocessing.scale(df_sales_amount[\"amount\"])\n\ndf_sales_amount.head(10)",
+          "# コード例2（fitを行うことで、別のデータでも同じ平均・標準偏差で標準化を行える）\ndf_sales_amount = (\n    df_receipt.query('not customer_id.str.startswith(\"Z\")', engine=\"python\")\n    .groupby(\"customer_id\")\n    .agg({\"amount\": \"sum\"})\n    .reset_index()\n)\n\nscaler = preprocessing.StandardScaler()\n\nscaler.fit(df_sales_amount[[\"amount\"]])\n\ndf_sales_amount[\"std_amount\"] = scaler.transform(df_sales_amount[[\"amount\"]])\n\ndf_sales_amount.head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "-- コード例1（STDDEV_POPで標準化）\nWITH sales_amount AS(\n    SELECT\n        customer_id,\n        SUM(amount) AS sum_amount\n    FROM\n        receipt\n    WHERE\n        customer_id NOT LIKE 'Z%'\n    GROUP BY\n        customer_id\n),\nstats_amount AS (\n    SELECT\n        AVG(sum_amount) AS avg_amount,\n        STDDEV_POP(sum_amount) AS stddev_amount\n    FROM\n        sales_amount\n)\nSELECT\n    customer_id,\n    sum_amount,\n    (sum_amount - avg_amount) / stddev_amount AS std_amount\nFROM sales_amount\nCROSS JOIN stats_amount\nLIMIT 10\n;",
+          "-- コード例2（STDDEV_SAMPで標準化、コード例2と若干値が変わる）\nWITH sales_amount AS(\n    SELECT\n        customer_id,\n        SUM(amount) AS sum_amount\n    FROM\n        receipt\n    WHERE\n        customer_id NOT LIKE 'Z%'\n    GROUP BY\n        customer_id\n),\nstats_amount AS (\n    SELECT\n        AVG(sum_amount) AS avg_amount,\n        STDDEV_SAMP(sum_amount) AS stddev_amount\n    FROM\n        sales_amount\n)\nSELECT\n    customer_id,\n    sum_amount,\n    (sum_amount - avg_amount) / stddev_amount AS std_amount\nFROM sales_amount\nCROSS JOIN stats_amount\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "060",
+      "python": {
+        "code_cells": [
+          "# コード例1\ndf_sales_amount = (\n    df_receipt.query('not customer_id.str.startswith(\"Z\")', engine=\"python\")\n    .groupby(\"customer_id\")\n    .agg({\"amount\": \"sum\"})\n    .reset_index()\n)\n\ndf_sales_amount[\"scale_amount\"] = preprocessing.minmax_scale(df_sales_amount[\"amount\"])\n\ndf_sales_amount.head(10)",
+          "# コード例2（fitを行うことで、別のデータでも同じ最小値・最大値で標準化を行える）\ndf_sales_amount = (\n    df_receipt.query('not customer_id.str.startswith(\"Z\")', engine=\"python\")\n    .groupby(\"customer_id\")\n    .agg({\"amount\": \"sum\"})\n    .reset_index()\n)\n\nscaler = preprocessing.MinMaxScaler()\n\nscaler.fit(df_sales_amount[[\"amount\"]])\n\ndf_sales_amount[\"scale_amount\"] = scaler.transform(df_sales_amount[[\"amount\"]])\n\ndf_sales_amount.head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "WITH sales_amount AS(\n    SELECT\n        customer_id,\n        SUM(amount) AS sum_amount\n    FROM\n        receipt\n    WHERE\n        customer_id NOT LIKE 'Z%'\n    GROUP BY\n        customer_id\n),\nstats_amount AS (\n    SELECT\n        MAX(sum_amount) AS max_amount,\n        MIN(sum_amount) AS min_amount\n    FROM\n        sales_amount\n)\nSELECT\n    customer_id,\n    sum_amount,\n    1.0 * (sum_amount - min_amount)\n            / (max_amount -  min_amount) AS scale_amount\nFROM sales_amount\nCROSS JOIN stats_amount\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "061",
+      "python": {
+        "code_cells": [
+          "df_sales_amount = (\n    df_receipt.query('not customer_id.str.startswith(\"Z\")', engine=\"python\")\n    .groupby(\"customer_id\")\n    .agg({\"amount\": \"sum\"})\n    .reset_index()\n)\n\ndf_sales_amount[\"log_amount\"] = np.log10(df_sales_amount[\"amount\"] + 0.5)\n\ndf_sales_amount.head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    customer_id,\n    sum_amount,\n    LOG(sum_amount + 0.5) AS log_amount\nFROM\n(\n    SELECT\n        customer_id,\n        SUM(amount) AS sum_amount\n    FROM\n        receipt\n    WHERE\n        customer_id NOT LIKE 'Z%'\n    GROUP BY\n        customer_id\n) AS sum_amount_tbl\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "062",
+      "python": {
+        "code_cells": [
+          "df_sales_amount = (\n    df_receipt.query('not customer_id.str.startswith(\"Z\")', engine=\"python\")\n    .groupby(\"customer_id\")\n    .agg({\"amount\": \"sum\"})\n    .reset_index()\n)\n\ndf_sales_amount[\"log_amount\"] = np.log(df_sales_amount[\"amount\"] + 0.5)\n\ndf_sales_amount.head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    customer_id,\n    sum_amount,\n    LN(sum_amount + 0.5) AS log_amount\nFROM\n(\n    SELECT\n        customer_id,\n        SUM(amount) AS sum_amount\n    FROM\n        receipt\n    WHERE\n        customer_id NOT LIKE 'Z%'\n    GROUP BY\n        customer_id\n) AS sum_amount_tbl\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "063",
+      "python": {
+        "code_cells": [
+          "df_tmp = df_product.copy()\n\ndf_tmp[\"unit_profit\"] = df_tmp[\"unit_price\"] - df_tmp[\"unit_cost\"]\n\ndf_tmp.head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    product_cd, \n    unit_price, \n    unit_cost,\n    unit_price - unit_cost AS unit_profit\nFROM\n    product\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "064",
+      "python": {
+        "code_cells": [
+          "df_tmp = df_product.copy()\n\ndf_tmp[\"unit_profit_rate\"] = (df_tmp[\"unit_price\"] - df_tmp[\"unit_cost\"]) / df_tmp[\n    \"unit_price\"\n]\n\ndf_tmp[\"unit_profit_rate\"].mean(skipna=True)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    AVG((unit_price * 1.0 - unit_cost) / unit_price) AS unit_profit_rate\nFROM\n    product\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "065",
+      "python": {
+        "code_cells": [
+          "df_tmp = df_product[[\"product_cd\", \"unit_price\", \"unit_cost\"]].copy()\n\ndf_tmp[\"new_price\"] = np.floor(df_tmp[\"unit_cost\"] / 0.7)\n\ndf_tmp[\"new_profit_rate\"] = (df_tmp[\"new_price\"] - df_tmp[\"unit_cost\"]) / df_tmp[\n    \"new_price\"\n]\n\ndf_tmp.head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "WITH new_price_tbl AS (\n    SELECT\n        product_cd, \n        unit_price, \n        unit_cost,\n        TRUNC(unit_cost / 0.7) AS new_price\n    FROM\n        product\n) \nSELECT\n    *,\n    (new_price - unit_cost) / new_price AS new_profit_rate\nFROM\n    new_price_tbl\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "066",
+      "python": {
+        "code_cells": [
+          "df_tmp = df_product[[\"product_cd\", \"unit_price\", \"unit_cost\"]].copy()\n\ndf_tmp[\"new_price\"] = np.round(df_tmp[\"unit_cost\"] / 0.7)\n\ndf_tmp[\"new_profit_rate\"] = (df_tmp[\"new_price\"] - df_tmp[\"unit_cost\"]) / df_tmp[\n    \"new_price\"\n]\n\ndf_tmp.head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "WITH new_price_tbl AS (\n    SELECT\n        product_cd, \n        unit_price, \n        unit_cost,\n        ROUND(unit_cost / 0.7) AS new_price\n    FROM\n        product\n) \nSELECT\n    *,\n    (new_price - unit_cost) / new_price AS new_profit_rate\nFROM\n    new_price_tbl\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "067",
+      "python": {
+        "code_cells": [
+          "df_tmp = df_product[[\"product_cd\", \"unit_price\", \"unit_cost\"]].copy()\n\ndf_tmp[\"new_price\"] = np.ceil(df_tmp[\"unit_cost\"] / 0.7)\n\ndf_tmp[\"new_profit_rate\"] = (df_tmp[\"new_price\"] - df_tmp[\"unit_cost\"]) / df_tmp[\n    \"new_price\"\n]\n\ndf_tmp.head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "WITH new_price_tbl AS (\n    SELECT\n        product_cd, \n        unit_price, \n        unit_cost,\n        CEIL(unit_cost / 0.7) AS new_price\n    FROM\n        product\n) \nSELECT\n    *,\n    (new_price - unit_cost) / new_price AS new_profit_rate\nFROM\n    new_price_tbl\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "068",
+      "python": {
+        "code_cells": [
+          "df_tmp = df_tmp = df_product[[\"product_cd\", \"unit_price\"]].copy()\n\ndf_tmp[\"tax_price\"] = np.floor(df_tmp[\"unit_price\"] * 1.1)\n\ndf_tmp.head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    product_cd,\n    unit_price,\n    TRUNC(unit_price * 1.1) AS tax_price\nFROM\n    product\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "069",
+      "python": {
+        "code_cells": [
+          "# コード例1\ndf_tmp_1 = (\n    df_receipt.groupby(\"customer_id\")\n    .agg({\"amount\": \"sum\"})\n    .reset_index()\n    .rename(columns={\"amount\": \"sum_all\"})\n)\n\ndf_tmp_2 = (\n    pd.merge(\n        df_receipt,\n        df_product.query('category_major_cd == \"07\"'),\n        how=\"inner\",\n        on=\"product_cd\",\n    )\n    .groupby(\"customer_id\")\n    .agg({\"amount\": \"sum\"})\n    .reset_index()\n    .rename(columns={\"amount\": \"sum_07\"})\n)\n\ndf_tmp_3 = pd.merge(df_tmp_1, df_tmp_2, how=\"inner\", on=\"customer_id\")\n\ndf_tmp_3[\"sales_rate\"] = df_tmp_3[\"sum_07\"] / df_tmp_3[\"sum_all\"]\n\ndf_tmp_3.head(10)",
+          "# コード例2（参考、unstackと横方向のsumを使った例）\ndf_temp = (\n    df_receipt.merge(df_product, how=\"left\", on=\"product_cd\")\n    .groupby([\"customer_id\", \"category_major_cd\"])[\"amount\"]\n    .sum()\n    .unstack()\n)\n\ndf_temp = df_temp[df_temp[\"07\"] > 0]\n\ndf_temp[\"sum_all\"] = df_temp.sum(axis=1)\n\ndf_temp[\"sales_rate\"] = df_temp[\"07\"] / df_temp[\"sum_all\"]\n\n# 以降はデータフレームの整形と表示のための処理\ndf_temp.columns.name = \"\"\n\ndf_temp = df_temp.reset_index()\n\ndf_temp.head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "WITH amount_all AS(\n    SELECT\n        customer_id,\n        SUM(amount) AS sum_all\n    FROM\n        receipt\n    GROUP BY\n        customer_id\n),\namount_07 AS (\n    SELECT\n        r.customer_id,\n        SUM(r.amount) AS sum_07\n    FROM\n        receipt r\n    JOIN\n        product p\n    ON\n        r.product_cd = p.product_cd\n    WHERE\n        p.category_major_cd = '07'\n    GROUP BY\n        customer_id\n)\nSELECT\n    amount_all.customer_id,\n    sum_all,\n    sum_07,\n    sum_07 * 1.0 / sum_all AS sales_rate\nFROM\n    amount_all\nJOIN\n    amount_07\nON\n    amount_all.customer_id = amount_07.customer_id\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "070",
+      "python": {
+        "code_cells": [
+          "df_tmp = df_receipt[[\"customer_id\", \"sales_ymd\"]].drop_duplicates()\n\ndf_tmp = pd.merge(\n    df_tmp,\n    df_customer[[\"customer_id\", \"application_date\"]],\n    how=\"inner\",\n    on=\"customer_id\",\n)\n\ndf_tmp[\"sales_ymd\"] = pd.to_datetime(df_tmp[\"sales_ymd\"].astype(\"str\"))\n\ndf_tmp[\"application_date\"] = pd.to_datetime(df_tmp[\"application_date\"])\n\ndf_tmp[\"elapsed_days\"] = df_tmp[\"sales_ymd\"] - df_tmp[\"application_date\"]\n\ndf_tmp[\"elapsed_days\"] = df_tmp[\"elapsed_days\"].dt.days\n\ndf_tmp.head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "WITH receipt_distinct AS (\n    SELECT distinct\n        customer_id,\n        sales_ymd\n    FROM\n        receipt\n)\nSELECT\n    c.customer_id,\n    r.sales_ymd,\n    c.application_date,\n    EXTRACT(DAY FROM (TO_TIMESTAMP(CAST(r.sales_ymd AS VARCHAR), 'YYYYMMDD') \n                - TO_TIMESTAMP(c.application_date, 'YYYYMMDD'))) AS elapsed_days\nFROM\n    receipt_distinct r\nJOIN\n    customer c\nON\n    r.customer_id = c.customer_id\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "071",
+      "python": {
+        "code_cells": [
+          "df_tmp = df_receipt[[\"customer_id\", \"sales_ymd\"]].drop_duplicates()\n\ndf_tmp = pd.merge(\n    df_tmp,\n    df_customer[[\"customer_id\", \"application_date\"]],\n    how=\"inner\",\n    on=\"customer_id\",\n)\n\ndf_tmp[\"sales_ymd\"] = pd.to_datetime(df_tmp[\"sales_ymd\"].astype(\"str\"))\n\ndf_tmp[\"application_date\"] = pd.to_datetime(df_tmp[\"application_date\"])\n\ndf_tmp[\"elapsed_months\"] = df_tmp[[\"sales_ymd\", \"application_date\"]].apply(\n    lambda x: relativedelta(x[0], x[1]).years * 12 + relativedelta(x[0], x[1]).months,\n    axis=1,\n)\n\ndf_tmp.head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "WITH receipt_distinct AS (\n    SELECT DISTINCT\n        customer_id,\n        sales_ymd\n    FROM\n        receipt\n),\ntime_age_tbl AS(\n    SELECT\n        c.customer_id,\n        r.sales_ymd,\n        c.application_date,\n        AGE(TO_TIMESTAMP(CAST(r.sales_ymd AS VARCHAR), 'YYYYMMDD'),\n                    TO_TIMESTAMP(c.application_date, 'YYYYMMDD')) AS time_age\n    FROM\n        receipt_distinct r\n    JOIN\n        customer c\n    ON\n        r.customer_id = c.customer_id\n)\nSELECT\n    customer_id, \n    sales_ymd, \n    application_date,\n    EXTRACT(YEAR FROM time_age) * 12 \n        + EXTRACT(MONTH FROM time_age) AS elapsed_months\nFROM\n    time_age_tbl\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "072",
+      "python": {
+        "code_cells": [
+          "df_tmp = df_receipt[[\"customer_id\", \"sales_ymd\"]].drop_duplicates()\n\ndf_tmp = pd.merge(\n    df_tmp,\n    df_customer[[\"customer_id\", \"application_date\"]],\n    how=\"inner\",\n    on=\"customer_id\",\n)\n\ndf_tmp[\"sales_ymd\"] = pd.to_datetime(df_tmp[\"sales_ymd\"].astype(\"str\"))\n\ndf_tmp[\"application_date\"] = pd.to_datetime(df_tmp[\"application_date\"])\n\ndf_tmp[\"elapsed_years\"] = df_tmp[[\"sales_ymd\", \"application_date\"]].apply(\n    lambda x: relativedelta(x[0], x[1]).years, axis=1\n)\n\ndf_tmp.head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "WITH receipt_distinct AS (\n    SELECT distinct\n        customer_id,\n        sales_ymd\n    FROM\n        receipt\n)\nSELECT\n    c.customer_id,\n    r.sales_ymd,\n    c.application_date,\n    EXTRACT(YEAR FROM AGE(\n        TO_TIMESTAMP(CAST(r.sales_ymd AS VARCHAR), 'YYYYMMDD'), \n        TO_TIMESTAMP(c.application_date, 'YYYYMMDD'))) AS elapsed_years\nFROM\n    receipt_distinct r\nJOIN\n    customer c\nON\n    r.customer_id = c.customer_id\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "073",
+      "python": {
+        "code_cells": [
+          "df_tmp = df_receipt[[\"customer_id\", \"sales_ymd\"]].drop_duplicates()\n\ndf_tmp = pd.merge(\n    df_tmp,\n    df_customer[[\"customer_id\", \"application_date\"]],\n    how=\"inner\",\n    on=\"customer_id\",\n)\n\ndf_tmp[\"sales_ymd\"] = pd.to_datetime(df_tmp[\"sales_ymd\"].astype(\"str\"))\n\ndf_tmp[\"application_date\"] = pd.to_datetime(df_tmp[\"application_date\"])\n\ndf_tmp[\"elapsed_epoch\"] = df_tmp[\"sales_ymd\"].view(np.int64) - df_tmp[\n    \"application_date\"\n].view(np.int64)\n\ndf_tmp[\"elapsed_epoch\"] = df_tmp[\"elapsed_epoch\"] / 10**9\n\ndf_tmp.head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "WITH receipt_distinct AS (\n    SELECT distinct\n        customer_id,\n        sales_ymd\n    FROM\n        receipt\n)\nSELECT\n    c.customer_id,\n    r.sales_ymd,\n    c.application_date,\n    EXTRACT(EPOCH FROM \n            TO_TIMESTAMP(CAST(r.sales_ymd AS VARCHAR), 'YYYYMMDD') - \n            TO_TIMESTAMP(c.application_date, 'YYYYMMDD')\n    ) AS elapsed_epoch\nFROM\n    receipt_distinct r\nJOIN\n    customer c\nON\n    r.customer_id = c.customer_id\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "074",
+      "python": {
+        "code_cells": [
+          "df_tmp = df_receipt[[\"sales_ymd\"]].copy()\n\ndf_tmp[\"sales_ymd\"] = pd.to_datetime(df_tmp[\"sales_ymd\"].astype(\"str\"))\n\ndf_tmp[\"elapsed_days\"] = df_tmp[\"sales_ymd\"].apply(lambda x: x.weekday())\n\ndf_tmp[\"monday\"] = df_tmp[\"sales_ymd\"].apply(\n    lambda x: x - relativedelta(days=x.weekday())\n)\n\ndf_tmp.head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "WITH elapsed_days_tbl AS (\n    SELECT\n        TO_DATE(CAST(sales_ymd AS VARCHAR), 'YYYYMMDD') AS sales_ymd,\n        EXTRACT(DOW FROM (\n            TO_DATE(CAST(sales_ymd AS VARCHAR), 'YYYYMMDD') - 1)) AS elapsed_days\n    FROM\n        receipt\n)\nSELECT\n    sales_ymd,\n    elapsed_days,\n    sales_ymd - CAST(elapsed_days AS INTEGER) AS monday\nFROM \n    elapsed_days_tbl\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "075",
+      "python": {
+        "code_cells": [
+          "df_customer.sample(frac=0.01).head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "-- コード例１（シンプルにやるなら。ただし1.0%前後で件数変動）\nSELECT * FROM customer WHERE RANDOM() <= 0.01\nLIMIT 10\n;",
+          "-- コード例２（丁寧にやるなら。カウントを作って出力件数を固定）\nWITH customer_tmp AS(\n    SELECT\n        *\n        ,ROW_NUMBER() OVER(ORDER BY RANDOM()) AS row\n        ,COUNT(*) OVER() AS cnt\n    FROM customer\n)\nSELECT \n    customer_id\n    ,customer_name\n    ,gender_cd\n    ,gender\n    ,birth_day\n    ,age\n    ,postal_cd\n    ,address\n    ,application_store_cd\n    ,application_date\n    ,status_cd\nFROM customer_tmp\nWHERE row <= cnt * 0.01\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "076",
+      "python": {
+        "code_cells": [
+          "# sklearn.model_selection.train_test_splitを使用した例\n_, df_tmp = train_test_split(\n    df_customer, test_size=0.1, stratify=df_customer[\"gender_cd\"]\n)\n\ndf_tmp.groupby(\"gender_cd\").agg({\"customer_id\": \"count\"})"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "-- コード例1\nWITH cusotmer_random AS (\n    SELECT\n        customer_id,\n        gender_cd,\n        cnt\n    FROM (\n        SELECT\n            gender_cd,\n            ARRAY_AGG(customer_id ORDER BY RANDOM()) AS customer_r,\n            COUNT(1) AS cnt\n        FROM\n            customer\n        GROUP BY gender_cd\n    )sample, UNNEST(customer_r) AS customer_id\n),\ncusotmer_rownum AS(\n    SELECT\n        * ,\n        ROW_NUMBER() OVER(PARTITION BY gender_cd) AS rn\n    FROM\n        cusotmer_random\n)\nSELECT\n    gender_cd,\n    COUNT(1) AS customer_num\nFROM\n    cusotmer_rownum\nWHERE\n    rn <= cnt * 0.1\nGROUP BY\n    gender_cd\n;",
+          "-- コード例2\nWITH cusotmer_random AS (\nSELECT \n    * , \n    ROW_NUMBER() OVER(PARTITION BY gender_cd ORDER BY RANDOM()) AS rn,\n    COUNT(1) OVER(PARTITION BY gender_cd) cnt\nFROM \n    customer\n)\nSELECT\n    gender_cd,\n    COUNT(1) AS customer_num\nFROM\n    cusotmer_random\nWHERE \n    rn <= cnt * 0.1\nGROUP BY\n    gender_cd\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "077",
+      "python": {
+        "code_cells": [
+          "df_sales_amount = df_receipt.groupby(\"customer_id\").agg({\"amount\": \"sum\"}).reset_index()\n\ndf_sales_amount[\"log_sum_amount\"] = np.log(df_sales_amount[\"amount\"] + 0.5)\n\ndf_sales_amount[\"log_sum_amount_ss\"] = preprocessing.scale(\n    df_sales_amount[\"log_sum_amount\"]\n)\n\ndf_sales_amount.query(\"abs(log_sum_amount_ss) > 3\").head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "WITH sales_amount AS(\n    SELECT\n        customer_id,\n        SUM(amount) AS sum_amount,\n        LN(SUM(amount) + 0.5) AS log_sum_amount\n    FROM\n        receipt\n    GROUP BY \n        customer_id\n)\nSELECT \n    customer_id,\n    sum_amount,\n    log_sum_amount\nFROM\n    sales_amount\nCROSS JOIN (\n    SELECT\n        AVG(log_sum_amount) AS avg_amount,\n        STDDEV_POP(log_sum_amount) AS std_amount\n    FROM sales_amount   \n) stats_amount\nWHERE\n    ABS(log_sum_amount - avg_amount) / std_amount > 3\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "078",
+      "python": {
+        "code_cells": [
+          "df_sales_amount = (\n    df_receipt.query('not customer_id.str.startswith(\"Z\")', engine=\"python\")\n    .groupby(\"customer_id\")\n    .agg({\"amount\": \"sum\"})\n    .reset_index()\n)\n\npct25 = np.percentile(df_sales_amount[\"amount\"], q=25)\npct75 = np.percentile(df_sales_amount[\"amount\"], q=75)\n\niqr = pct75 - pct25\namount_low = pct25 - (iqr * 1.5)\namount_hight = pct75 + (iqr * 1.5)\n\ndf_sales_amount.query(\"amount < @amount_low or @amount_hight < amount\").head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "WITH sales_amount AS(\n    SELECT \n        customer_id,\n        SUM(amount) AS sum_amount\n    FROM\n        receipt\n    WHERE\n        customer_id NOT LIKE 'Z%'\n    GROUP BY \n        customer_id\n)\nSELECT\n    customer_id,\n    sum_amount\nFROM\n    sales_amount\nCROSS JOIN (\n    SELECT\n        PERCENTILE_CONT(0.25) WITHIN GROUP(ORDER BY sum_amount) AS amount_25per,\n        PERCENTILE_CONT(0.75) WITHIN GROUP(ORDER BY sum_amount) AS amount_75per\n    FROM sales_amount   \n) stats_amount\nWHERE\n    sum_amount < amount_25per - (amount_75per - amount_25per) * 1.5 \n    OR amount_75per + (amount_75per - amount_25per) * 1.5 < sum_amount\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "079",
+      "python": {
+        "code_cells": [
+          "df_product.isnull().sum()"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT \n    SUM(\n        CASE WHEN product_cd IS NULL THEN 1 ELSE 0 END\n    ) AS product_cd,\n    SUM(\n        CASE WHEN category_major_cd IS NULL THEN 1 ELSE 0 END\n    ) AS category_major_cd,\n    SUM(\n        CASE WHEN category_medium_cd IS NULL THEN 1 ELSE 0 END\n    ) AS category_medium_cd,\n    SUM(\n        CASE WHEN category_small_cd IS NULL THEN 1 ELSE 0 END\n    ) AS category_small_cd,\n    SUM(\n        CASE WHEN unit_price IS NULL THEN 1 ELSE 0 END\n    ) AS unit_price,\n    SUM(\n        CASE WHEN unit_cost IS NULL THEN 1 ELSE 0 END\n    ) AS unit_cost\nFROM product LIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "080",
+      "python": {
+        "code_cells": [
+          "df_product_1 = df_product.copy()\n\ndf_product_1.dropna(inplace=True)\n\nprint(\"削除前:\", len(df_product))\nprint(\"削除後:\", len(df_product_1))"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "DROP TABLE IF EXISTS product_1;\nCREATE TABLE product_1 AS (\n    SELECT * FROM product\n    WHERE unit_price IS NOT NULL AND unit_cost IS NOT NULL\n);",
+          "SELECT '削除前', COUNT(1) FROM product;",
+          "SELECT '削除後', COUNT(1) FROM product_1;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "081",
+      "python": {
+        "code_cells": [
+          "# コード例1（Pandasのfillna）\ndf_product_2 = df_product.fillna(\n    {\n        \"unit_price\": np.round(np.nanmean(df_product[\"unit_price\"])),\n        \"unit_cost\": np.round(np.nanmean(df_product[\"unit_cost\"])),\n    }\n)\n\ndf_product_2.isnull().sum()",
+          "# コード例2（scikit-learnのSimpleImputer）\nimp_mean = SimpleImputer(missing_values=np.nan, strategy=\"mean\")\n\nimp_values = imp_mean.fit_transform(df_product[[\"unit_price\", \"unit_cost\"]])\n\ndf_product_2 = df_product.copy()\n\ndf_product_2[[\"unit_price\", \"unit_cost\"]] = imp_values.round()\n\ndf_product_2.isnull().sum()"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "DROP TABLE IF EXISTS product_2;\nCREATE TABLE product_2 AS (\n    SELECT\n        product_cd, \n        category_major_cd, \n        category_medium_cd, \n        category_small_cd, \n        COALESCE(unit_price, unit_avg) AS unit_price,\n        COALESCE(unit_cost, cost_avg) AS unit_cost\n    FROM\n        product\n    CROSS JOIN (\n        SELECT\n            ROUND(AVG(unit_price)) AS unit_avg,\n            ROUND(AVG(unit_cost)) AS cost_avg\n        FROM\n            product\n    ) stats_product\n);",
+          "SELECT \n    SUM(CASE WHEN unit_price IS NULL THEN 1 ELSE 0 END) AS unit_price,\n    SUM(CASE WHEN unit_cost IS NULL THEN 1 ELSE 0 END) AS unit_cost\nFROM product_2\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "082",
+      "python": {
+        "code_cells": [
+          "# コード例1（Pandasのfillna）\ndf_product_3 = df_product.fillna(\n    {\n        \"unit_price\": np.round(np.nanmedian(df_product[\"unit_price\"])),\n        \"unit_cost\": np.round(np.nanmedian(df_product[\"unit_cost\"])),\n    }\n)\n\ndf_product_3.isnull().sum()",
+          "# コード例2（scikit-learnのSimpleImputer）\nimp_mean = SimpleImputer(missing_values=np.nan, strategy=\"median\")\n\nimp_values = imp_mean.fit_transform(df_product[[\"unit_price\", \"unit_cost\"]])\n\ndf_product_3 = df_product.copy()\n\ndf_product_3[[\"unit_price\", \"unit_cost\"]] = imp_values.round()\n\ndf_product_3.isnull().sum()"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "DROP TABLE IF EXISTS product_3;\nCREATE TABLE product_3 AS (\n    SELECT\n        product_cd, \n        category_major_cd, \n        category_medium_cd, \n        category_small_cd, \n        COALESCE(unit_price, unit_med) AS unit_price,\n        COALESCE(unit_cost, cost_med) AS unit_cost\n    FROM\n        product\n    CROSS JOIN (\n        SELECT\n            ROUND(\n                PERCENTILE_CONT(0.5) WITHIN GROUP(ORDER BY unit_price)\n            ) AS unit_med,\n            ROUND(\n                PERCENTILE_CONT(0.5) WITHIN GROUP(ORDER BY unit_cost)\n            ) AS cost_med\n        FROM\n            product\n    ) stats_product\n);",
+          "SELECT \n    SUM(CASE WHEN unit_price IS NULL THEN 1 ELSE 0 END) AS unit_price,\n    SUM(CASE WHEN unit_cost IS NULL THEN 1 ELSE 0 END) AS unit_cost\nFROM product_3\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "083",
+      "python": {
+        "code_cells": [
+          "# コード例1\ndf_tmp = (\n    df_product.groupby(\"category_small_cd\")\n    .agg(median_price=(\"unit_price\", \"median\"), median_cost=(\"unit_cost\", \"median\"))\n    .reset_index()\n)\n\ndf_product_4 = pd.merge(df_product, df_tmp, how=\"inner\", on=\"category_small_cd\")\n\ndf_product_4[\"unit_price\"] = df_product_4[[\"unit_price\", \"median_price\"]].apply(\n    lambda x: np.round(x[1]) if np.isnan(x[0]) else x[0], axis=1\n)\n\ndf_product_4[\"unit_cost\"] = df_product_4[[\"unit_cost\", \"median_cost\"]].apply(\n    lambda x: np.round(x[1]) if np.isnan(x[0]) else x[0], axis=1\n)\n\ndf_product_4.isnull().sum()",
+          "# コード例2（maskの活用）\ndf_tmp = (\n    df_product.groupby(\"category_small_cd\")\n    .agg(median_price=(\"unit_price\", \"median\"), median_cost=(\"unit_cost\", \"median\"))\n    .reset_index()\n)\n\ndf_product_4 = df_product.merge(df_tmp, how=\"inner\", on=\"category_small_cd\")\n\ndf_product_4[\"unit_price\"] = df_product_4[\"unit_price\"].mask(\n    df_product_4[\"unit_price\"].isnull(), df_product_4[\"median_price\"].round()\n)\n\ndf_product_4[\"unit_cost\"] = df_product_4[\"unit_cost\"].mask(\n    df_product_4[\"unit_cost\"].isnull(), df_product_4[\"median_cost\"].round()\n)\n\ndf_product_4.isnull().sum()",
+          "# コード例3（fillna、transformの活用）\ndf_product_4 = df_product.copy()\n\nfor x in [\"unit_price\", \"unit_cost\"]:\n    df_product_4[x] = df_product_4[x].fillna(\n        df_product_4.groupby(\"category_small_cd\")[x].transform(\"median\").round()\n    )\n\ndf_product_4.isnull().sum()"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "DROP TABLE IF EXISTS product_4;\nCREATE TABLE product_4 AS (\n    WITH category_median AS(\n        SELECT\n            category_small_cd, \n            ROUND(\n                PERCENTILE_CONT(0.5) WITHIN GROUP(ORDER BY unit_price)\n            ) AS unit_med,\n            ROUND(\n                PERCENTILE_CONT(0.5) WITHIN GROUP(ORDER BY unit_cost)\n            ) AS cost_med\n        FROM product\n        GROUP BY category_small_cd\n    )\n    SELECT\n        product_cd, \n        category_major_cd, \n        category_medium_cd, \n        category_small_cd, \n        COALESCE(unit_price, unit_med) AS unit_price,\n        COALESCE(unit_cost, cost_med) AS unit_cost\n    FROM\n        product\n    JOIN\n        category_median\n    USING(category_small_cd)\n);",
+          "SELECT \n    SUM(CASE WHEN unit_price IS NULL THEN 1 ELSE 0 END) AS unit_price,\n    SUM(CASE WHEN unit_cost IS NULL THEN 1 ELSE 0 END) AS unit_cost\nFROM product_4\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "084",
+      "python": {
+        "code_cells": [
+          "df_receipt_2019 = (\n    df_receipt.query(\"20190101 <= sales_ymd <= 20191231\")\n    .groupby(\"customer_id\")\n    .agg(amount_2019=(\"amount\", \"sum\"))\n    .reset_index()\n)\n\ndf_receipt_all = (\n    df_receipt.groupby(\"customer_id\").agg(amount_all=(\"amount\", \"sum\")).reset_index()\n)\n\ndf_sales_rate = (\n    df_customer[[\"customer_id\"]]\n    .merge(df_receipt_2019, how=\"left\", on=\"customer_id\")\n    .merge(df_receipt_all, how=\"left\", on=\"customer_id\")\n)\n\ndf_sales_rate[\"amount_2019\"] = df_sales_rate[\"amount_2019\"].fillna(0)\ndf_sales_rate[\"amount_all\"] = df_sales_rate[\"amount_all\"].fillna(0)\n\ndf_sales_rate[\"amount_rate\"] = df_sales_rate[[\"amount_2019\", \"amount_all\"]].apply(\n    lambda x: 0 if x[0] == 0 else x[0] / x[1], axis=1\n)\n\ndf_sales_rate[\"amount_rate\"] = df_sales_rate[\"amount_rate\"].fillna(0)\n\ndf_sales_rate.query(\"amount_rate > 0\").head(10)",
+          "df_tmp.isnull().sum()"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "DROP TABLE IF EXISTS sales_rate;\n\nCREATE TABLE sales_rate AS(\n    WITH sales_amount_2019 AS (\n        SELECT\n            customer_id,\n            SUM(amount) AS sum_amount_2019\n        FROM\n            receipt\n        WHERE\n            sales_ymd BETWEEN 20190101 AND 20191231\n        GROUP BY\n            customer_id\n    ),\n    sales_amount_all AS (\n        SELECT\n            customer_id,\n            SUM(amount) AS sum_amount_all\n        FROM\n            receipt\n        GROUP BY\n            customer_id\n    )\n    SELECT\n        a.customer_id,\n        COALESCE(b.sum_amount_2019, 0) AS sales_amount_2019,\n        COALESCE(c.sum_amount_all, 0)  AS sales_amount_all,\n        CASE COALESCE(c.sum_amount_all, 0)\n            WHEN 0 THEN 0 \n            ELSE COALESCE(b.sum_amount_2019, 0) * 1.0 / c.sum_amount_all\n        END AS sales_rate\n    FROM\n        customer a\n    LEFT JOIN\n        sales_amount_2019 b\n    ON a.customer_id = b.customer_id\n    LEFT JOIN\n        sales_amount_all c\n    ON a.customer_id = c.customer_id);",
+          "SELECT * FROM sales_rate\nWHERE sales_rate > 0\nLIMIT 10\n;",
+          "SELECT\n    SUM(CASE WHEN customer_id IS NULL THEN 1 ELSE 0 END) AS unit_price,\n    SUM(CASE WHEN sales_amount_2019 IS NULL THEN 1 ELSE 0 END) AS unit_price,\n    SUM(CASE WHEN sales_amount_all IS NULL THEN 1 ELSE 0 END) AS unit_cost,\n    SUM(CASE WHEN sales_rate IS NULL THEN 1 ELSE 0 END) AS unit_cost\nFROM sales_rate \n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "085",
+      "python": {
+        "code_cells": [
+          "df_geocode_1 = (\n    df_geocode.groupby(\"postal_cd\")\n    .agg(m_longitude=(\"longitude\", \"mean\"), m_latitude=(\"latitude\", \"mean\"))\n    .reset_index()\n)\n\ndf_customer_1 = pd.merge(df_customer, df_geocode_1, how=\"inner\", on=\"postal_cd\")\n\ndf_customer_1.head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "DROP TABLE IF EXISTS customer_1;\n\nCREATE TABLE customer_1 AS (\n    WITH geocode_avg AS(\n        SELECT\n            postal_cd,\n            AVG(longitude) AS m_longitude,\n            AVG(latitude) AS m_latitude\n        FROM\n            geocode\n        GROUP BY \n            postal_cd\n    )\n    SELECT \n        *\n    FROM\n        customer c\n    JOIN\n        geocode_avg g\n    USING(postal_cd)\n);",
+          "SELECT * FROM customer_1 LIMIT 10;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "086",
+      "python": {
+        "code_cells": [
+          "# コード例1\ndef calc_distance(x1, y1, x2, y2):\n    distance = 6371 * math.acos(\n        math.sin(math.radians(x1)) * math.sin(math.radians(x2))\n        + math.cos(math.radians(x1))\n        * math.cos(math.radians(x2))\n        * math.cos(math.radians(y1) - math.radians(y2))\n    )\n    return distance\n\n\ndf_tmp = pd.merge(\n    df_customer_1,\n    df_store,\n    how=\"inner\",\n    left_on=\"application_store_cd\",\n    right_on=\"store_cd\",\n).rename(columns={\"address_x\": \"customer_address\", \"address_y\": \"store_address\"})\n\ndf_tmp[\"distance\"] = df_tmp[\n    [\"m_latitude\", \"m_longitude\", \"latitude\", \"longitude\"]\n].apply(lambda x: calc_distance(x[0], x[1], x[2], x[3]), axis=1)\n\ndf_tmp[[\"customer_id\", \"customer_address\", \"store_address\", \"distance\"]].head(10)",
+          "# コード例2\ndef calc_distance_numpy(x1, y1, x2, y2):\n    x1_r = np.radians(x1)\n    x2_r = np.radians(x2)\n    y1_r = np.radians(y1)\n    y2_r = np.radians(y2)\n    return 6371 * np.arccos(\n        np.sin(x1_r) * np.sin(x2_r) + np.cos(x1_r) * np.cos(x2_r) * np.cos(y1_r - y2_r)\n    )\n\n\ndf_tmp = df_customer_1.merge(\n    df_store, how=\"inner\", left_on=\"application_store_cd\", right_on=\"store_cd\"\n).rename(columns={\"address_x\": \"customer_address\", \"address_y\": \"store_address\"})\n\ndf_tmp[\"distance\"] = calc_distance_numpy(\n    df_tmp[\"m_latitude\"], df_tmp[\"m_longitude\"], df_tmp[\"latitude\"], df_tmp[\"longitude\"]\n)\n\ndf_tmp[[\"customer_id\", \"customer_address\", \"store_address\", \"distance\"]].head(10)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT\n    c.customer_id,\n    c.address AS customer_address,\n    s.address AS store_address,\n    6371 * ACOS( \n        SIN(RADIANS(c.m_latitude)) \n        * SIN(RADIANS(s.latitude))\n        + COS(RADIANS(c.m_latitude)) \n        * COS(RADIANS(s.latitude)) \n        * COS(RADIANS(c.m_longitude) - RADIANS(s.longitude))\n    ) AS distance FROM\n    customer_1 c\nJOIN\n    store s\nON\n    c.application_store_cd = s.store_cd\nLIMIT 10\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "087",
+      "python": {
+        "code_cells": [
+          "df_receipt_tmp = (\n    df_receipt.groupby(\"customer_id\").agg(sum_amount=(\"amount\", \"sum\")).reset_index()\n)\n\ndf_customer_u = pd.merge(df_customer, df_receipt_tmp, how=\"left\", on=\"customer_id\")\n\ndf_customer_u[\"sum_amount\"] = df_customer_u[\"sum_amount\"].fillna(0)\n\ndf_customer_u = df_customer_u.sort_values(\n    [\"sum_amount\", \"customer_id\"], ascending=[False, True]\n)\n\ndf_customer_u.drop_duplicates(\n    subset=[\"customer_name\", \"postal_cd\"], keep=\"first\", inplace=True\n)\n\nprint(\n    \"df_customer_cnt:\",\n    len(df_customer),\n    \"df_customer_u_cnt:\",\n    len(df_customer_u),\n    \"diff:\",\n    len(df_customer) - len(df_customer_u),\n)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "DROP TABLE IF EXISTS customer_u;\nCREATE TABLE customer_u AS (\n    WITH sales_amount AS(\n        SELECT\n            c.customer_id,\n            c.customer_name,\n            c.postal_cd, \n            COALESCE(SUM(r.amount), 0) AS sum_amount\n        FROM\n            customer c\n\n        LEFT JOIN\n            receipt r        \n        ON c.customer_id = r.customer_id\n        GROUP by\n            c.customer_id, c.customer_name, c.postal_cd\n    ),\n    sales_ranking AS(\n        SELECT\n            *,\n            ROW_NUMBER() OVER(\n                PARTITION BY customer_name, postal_cd \n                ORDER BY sum_amount desc, customer_id ) AS ranking\n        FROM sales_amount\n    )\n    SELECT c.*\n    FROM\n        customer c\n    JOIN\n        sales_ranking r\n    ON\n        c.customer_id = r.customer_id\n        AND r.ranking = 1\n);",
+          "SELECT \n    customer_cnt, \n    customer_u_cnt, \n    customer_cnt - customer_u_cnt AS diff \nFROM\n    (SELECT COUNT(1) AS customer_cnt FROM customer) customer\nCROSS JOIN (SELECT COUNT(1) AS customer_u_cnt FROM customer_u) customer_u\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "088",
+      "python": {
+        "code_cells": [
+          "df_customer_n = pd.merge(\n    df_customer,\n    df_customer_u[[\"customer_name\", \"postal_cd\", \"customer_id\"]],\n    how=\"inner\",\n    on=[\"customer_name\", \"postal_cd\"],\n)\n\ndf_customer_n.rename(\n    columns={\"customer_id_x\": \"customer_id\", \"customer_id_y\": \"integration_id\"},\n    inplace=True,\n)\n\nprint(\n    \"ID数の差\",\n    len(df_customer_n[\"customer_id\"].unique())\n    - len(df_customer_n[\"integration_id\"].unique()),\n)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "DROP TABLE IF EXISTS customer_n;\nCREATE TABLE customer_n AS (\n    SELECT \n        c.*, \n        u.customer_id AS integration_id\n    FROM \n        customer c\n    JOIN\n        customer_u u\n    ON c.customer_name = u.customer_name\n        AND c.postal_cd = u.postal_cd\n);",
+          "SELECT COUNT(1) AS ID数の差 FROM customer_n\nWHERE customer_id != integration_id;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "089",
+      "python": {
+        "code_cells": [
+          "df_sales_customer = df_receipt.groupby(\"customer_id\").agg({\"amount\": sum}).reset_index()\n\ndf_sales_customer = df_sales_customer.query(\"amount > 0\")\n\ndf_tmp = pd.merge(\n    df_customer, df_sales_customer[\"customer_id\"], how=\"inner\", on=\"customer_id\"\n)\n\ndf_train, df_test = train_test_split(df_tmp, test_size=0.2, random_state=71)\n\nprint(\"学習データ割合: \", len(df_train) / len(df_tmp))\nprint(\"テストデータ割合: \", len(df_test) / len(df_tmp))"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT SETSEED(0.1);\n\nCREATE TEMP TABLE IF NOT EXISTS sales_customer AS (\n    SELECT\n        customer_id ,\n        ROW_NUMBER() OVER(ORDER BY RANDOM()) AS row\n    FROM\n        customer\n    JOIN\n        receipt\n    USING(customer_id)\n    GROUP BY customer_id\n    HAVING SUM(AMOUNT) > 0\n);\n\nDROP TABLE IF EXISTS customer_train;\nCREATE TABLE customer_train AS\n    SELECT\n        customer.*\n    FROM\n        sales_customer\n    JOIN\n        customer \n    USING(customer_id)\n    WHERE\n        sales_customer.row <= (SELECT\n                                  COUNT(1) \n                              FROM sales_customer) * 0.8\n;\n\nDROP TABLE IF EXISTS customer_test;\nCREATE TABLE customer_test AS\n    SELECT\n        customer.* \n    FROM\n        sales_customer \n    JOIN\n        customer\n    USING(customer_id)\n    EXCEPT\n        SELECT * FROM customer_train\n;",
+          "SELECT\n    train_cnt * 1.0 / all_cnt as 学習データ割合,\n    test_cnt * 1.0 / all_cnt as テストデータ割合\nFROM\n    (SELECT COUNT(1) AS all_cnt FROM sales_customer) all_data\nCROSS JOIN\n    (SELECT COUNT(1) AS train_cnt FROM customer_train) train_data\nCROSS JOIN\n    (SELECT COUNT(1) AS test_cnt FROM customer_test) test_data\n;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "090",
+      "python": {
+        "code_cells": [
+          "# コード例1（自作関数）\ndf_ts_amount = df_receipt[[\"sales_ymd\", \"amount\"]].copy()\n\ndf_ts_amount[\"sales_ym\"] = df_ts_amount[\"sales_ymd\"].astype(\"str\").str[0:6]\n\ndf_ts_amount = df_ts_amount.groupby(\"sales_ym\").agg({\"amount\": \"sum\"}).reset_index()\n\n# 長期間データに対する多数のデータセットもループなどで処理できるように関数化\ndef split_data(df, train_size, test_size, slide_window, start_point):\n    train_start = start_point * slide_window\n    test_start = train_start + train_size\n    return df[train_start:test_start], df[test_start : test_start + test_size]\n\n\ndf_train_1, df_test_1 = split_data(\n    df_ts_amount, train_size=12, test_size=6, slide_window=6, start_point=0\n)\n\ndf_train_2, df_test_2 = split_data(\n    df_ts_amount, train_size=12, test_size=6, slide_window=6, start_point=1\n)\n\ndf_train_3, df_test_3 = split_data(\n    df_ts_amount, train_size=12, test_size=6, slide_window=6, start_point=2\n)",
+          "# df_train_2とdf_train_3の表示は割愛\ndf_train_1",
+          "# df_test_2とdf_test_３の表示は割愛\ndf_test_1",
+          "# コード例2（scikit-learnのTimeSeriesSplit）\ntscv = TimeSeriesSplit(gap=0, max_train_size=12, n_splits=3, test_size=6)\n\n# TimeSeriesSplitは最新のデータが使われるように分割されるが、\n# SQL、Rの解答例と同じとなるようにデータ期間を調整\n# できる限り最新データを使うようにするなら不要\ndf_ts_amount = df_ts_amount.query('sales_ym <= \"201906\"')\n\nseries_list = []\nfor train_index, test_index in tscv.split(df_ts_amount):\n    series_list.append((df_ts_amount.loc[train_index], df_ts_amount.loc[test_index]))\n\ndf_train_1, df_test_1 = series_list[0]\ndf_train_2, df_test_2 = series_list[1]\ndf_train_3, df_test_3 = series_list[2]",
+          "# df_train_2とdf_train_3の表示は割愛\ndf_train_1",
+          "# df_test_2とdf_test_３の表示は割愛\ndf_test_1"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "-- SQL向きではないため、やや強引に記載する（分割数が多くなる場合はSQLが長くなるため現実的ではない）\n-- また、秒単位のデータなど時系列が細かく、かつ長期間に渡る場合はデータが膨大となるため注意（そのようなケースではループ処理でモデル学習ができる言語が望ましい）\n-- 学習データ(0)とテストデータ(1)を区別するフラグを付与する\n\n-- 下準備として年月ごとに売上金額を集計し、連番を付与\nCREATE TEMP TABLE IF NOT EXISTS ts_amount AS (\n    SELECT \n        SUBSTR(CAST(sales_ymd AS VARCHAR), 1, 6) AS sales_ym, \n        SUM(amount) AS sum_amount,\n        ROW_NUMBER() OVER(\n            ORDER BY SUBSTR(CAST(sales_ymd AS VARCHAR), 1, 6)) AS rn\n    FROM\n        receipt\n    GROUP BY sales_ym\n);\n\n-- SQLでは限界があるが、作成データセットの増加に伴いなるべく使いまわしができるものにする\n-- WITH句内のLAG関数について、ラグ期間を変えれば使い回せるよう記述\nDROP TABLE IF EXISTS series_data_1 ;\nCREATE TABLE series_data_1 AS (\n    WITH lag_amount AS (\n        SELECT\n            sales_ym,\n            sum_amount,\n            LAG(rn, 0) OVER (ORDER BY rn) AS rn\n        FROM ts_amount\n    )\n    SELECT \n        sales_ym,\n        sum_amount, \n        CASE WHEN rn <= 12 THEN 0 WHEN 12 < rn THEN 1 END as test_flg\n    FROM lag_amount \n    WHERE rn BETWEEN 1 AND 18);\n\n\nDROP TABLE IF EXISTS series_data_2 ;\nCREATE TABLE series_data_2 AS (\n    WITH lag_amount AS (\n        SELECT \n            sales_ym, \n            sum_amount, \n            LAG(rn, 6) OVER (ORDER BY rn) AS rn\n        FROM ts_amount\n    )\n    SELECT\n        sales_ym, \n        sum_amount, \n        CASE WHEN rn <= 12 THEN 0 WHEN 12 < rn THEN 1 END as test_flg\n    FROM lag_amount\n    WHERE rn BETWEEN 1 AND 18);\n\nDROP TABLE IF EXISTS series_data_3 ;\nCREATE TABLE series_data_3 AS (\n    WITH lag_amount AS (\n        SELECT\n            sales_ym,\n            sum_amount,\n            LAG(rn, 12) OVER (ORDER BY rn) AS rn\n        FROM ts_amount\n    )\n    SELECT \n        sales_ym, \n        sum_amount, \n        CASE WHEN rn <= 12 THEN 0 WHEN 12 < rn THEN 1 END as test_flg\n    FROM lag_amount\n    WHERE rn BETWEEN 1 AND 18);",
+          "-- series_data_2とseries_data_3の表示は割愛\nSELECT * FROM series_data_1;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "091",
+      "python": {
+        "code_cells": [
+          "df_tmp = df_receipt.groupby(\"customer_id\").agg({\"amount\": \"sum\"}).reset_index()\n\ndf_tmp = pd.merge(df_customer, df_tmp, how=\"left\", on=\"customer_id\")\n\ndf_tmp[\"is_buy_flag\"] = np.where(df_tmp[\"amount\"].isnull(), 0, 1)\n\nrs = RandomUnderSampler(random_state=71)\n\ndf_down_sampling, _ = rs.fit_resample(df_tmp, df_tmp.is_buy_flag)\n\nprint(\"0の件数\", len(df_down_sampling.query(\"is_buy_flag == 0\")))\nprint(\"1の件数\", len(df_down_sampling.query(\"is_buy_flag == 1\")))"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "SELECT SETSEED(0.1); \n\nCREATE TEMP TABLE IF NOT EXISTS down_sampling AS (\n    WITH pre_table_1 AS(\n        SELECT\n            c.*\n            ,COALESCE(r.sum_amount,0) AS sum_amount\n        FROM\n            customer c\n        LEFT JOIN (\n            SELECT\n                customer_id,\n                SUM(amount) AS sum_amount\n            FROM\n                receipt\n            GROUP BY\n                customer_id\n        ) r \n        ON\n            c.customer_id=r.customer_id\n    )\n    ,pre_table_2 AS(\n        SELECT\n            *\n            ,CASE WHEN sum_amount > 0 THEN 1 ELSE 0 END  AS is_buy_flag\n            ,CASE WHEN sum_amount = 0 THEN 1 ELSE 0 END  AS is_not_buy_flag\n        FROM\n            pre_table_1\n    )\n    ,pre_table_3 AS(\n        SELECT\n            *\n            ,ROW_NUMBER() OVER(PARTITION BY is_buy_flag ORDER BY RANDOM())\n        FROM\n            pre_table_2\n        CROSS JOIN\n            (SELECT SUM(is_buy_flag) AS buying FROM pre_table_2) AS t1\n        CROSS JOIN\n            (SELECT SUM(is_not_buy_flag) AS not_buying FROM pre_table_2) AS t2\n    )\n    SELECT\n        *\n    FROM\n        pre_table_3\n    WHERE\n        row_number <= buying\n        AND row_number <= not_buying\n);",
+          "SELECT is_buy_flag, COUNT(1) FROM down_sampling GROUP BY is_buy_flag;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "092",
+      "python": {
+        "code_cells": [
+          "df_gender_std = df_customer[[\"gender_cd\", \"gender\"]].drop_duplicates()\n\ndf_customer_std = df_customer.drop(columns=\"gender\")",
+          "# データの内容確認\ndf_customer_std.head(3)",
+          "# データの内容確認\ndf_gender_std.head(3)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "DROP TABLE IF EXISTS customer_std;\nCREATE TABLE customer_std AS (\n    SELECT\n        customer_id,\n        customer_name,\n        gender_cd,\n        birth_day,\n        age,\n        postal_cd,\n        application_store_cd,\n        application_date,\n        status_cd\n    FROM\n        customer\n);\n\nDROP TABLE IF EXISTS gender_std;\nCREATE TABLE gender_std AS (\n    SELECT distinct\n        gender_cd, gender\n    FROM\n        customer\n);",
+          "-- データの内容確認\nSELECT * FROM customer_std LIMIT 3;",
+          "-- データの内容確認\nSELECT * FROM gender_std LIMIT 3;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "093",
+      "python": {
+        "code_cells": [
+          "df_product_full = pd.merge(\n    df_product,\n    df_category[\n        [\n            \"category_small_cd\",\n            \"category_major_name\",\n            \"category_medium_name\",\n            \"category_small_name\",\n        ]\n    ],\n    how=\"inner\",\n    on=\"category_small_cd\",\n)\n\n# データの内容確認\ndf_product_full.head(3)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "DROP TABLE IF EXISTS product_full;\nCREATE TABLE product_full AS (\n    SELECT\n        p.product_cd,\n        p.category_major_cd,\n        c.category_major_name,\n        p.category_medium_cd,\n        c.category_medium_name,\n        p.category_small_cd,\n        c.category_small_name,\n        p.unit_price,\n        p.unit_cost\n    FROM\n        product p\n    JOIN\n        category c\n    USING(category_small_cd)\n);",
+          "-- データの内容確認\nSELECT * FROM product_full LIMIT 3;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "094",
+      "python": {
+        "code_cells": [
+          "# コード例1\n# 解答ファイルの置き場所が設問ファイルと異なるため、パスが'../data'となっている点に注意\ndf_product_full.to_csv(\n    \"../data/P_df_product_full_UTF-8_header.csv\", encoding=\"UTF-8\", index=False\n)",
+          "# コード例2（BOM付きでExcelの文字化けを防ぐ）\ndf_product_full.to_csv(\n    \"../data/P_df_product_full_UTF-8BOM_header.csv\", encoding=\"utf_8_sig\", index=False\n)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "COPY product_full TO '/tmp/data/S_product_full_UTF-8_header.csv' \nWITH CSV HEADER ENCODING 'UTF-8';"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "095",
+      "python": {
+        "code_cells": [
+          "# 解答ファイルの置き場所が設問ファイルと異なるため、パスが'../data'となっている点に注意\ndf_product_full.to_csv(\n    \"../data/P_df_product_full_CP932_header.csv\", encoding=\"CP932\", index=False\n)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "COPY product_full TO '/tmp/data/S_product_full_SJIS_header.csv' \nWITH CSV HEADER ENCODING 'SJIS';"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "096",
+      "python": {
+        "code_cells": [
+          "# 解答ファイルの置き場所が設問ファイルと異なるため、パスが'../data'となっている点に注意\ndf_product_full.to_csv(\n    \"../data/P_df_product_full_UTF-8_noh.csv\",\n    header=False,\n    encoding=\"UTF-8\",\n    index=False,\n)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "COPY product_full TO '/tmp/data/S_product_full_UTF-8_noh.csv' \nWITH CSV ENCODING 'UTF-8';"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "097",
+      "python": {
+        "code_cells": [
+          "# 解答ファイルの置き場所が設問ファイルと異なるため、パスが'../data'となっている点に注意\ndf_product_full = pd.read_csv(\n    \"../data/P_df_product_full_UTF-8_header.csv\",\n    dtype={\n        \"category_major_cd\": str,\n        \"category_medium_cd\": str,\n        \"category_small_cd\": str,\n    },\n    encoding=\"UTF-8\",\n)\n\ndf_product_full.head(3)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "DROP TABLE IF EXISTS product_full;\nCREATE TABLE product_full (\n        product_cd           VARCHAR(10),\n        category_major_cd    VARCHAR(2),\n        category_major_name  VARCHAR(20),\n        category_medium_cd   VARCHAR(4),\n        category_medium_name VARCHAR(20),\n        category_small_cd    VARCHAR(6),\n        category_small_name  VARCHAR(20),\n        unit_price           INTEGER,\n        unit_cost            INTEGER\n);",
+          "COPY product_full FROM '/tmp/data/S_product_full_UTF-8_header.csv' \nWITH CSV HEADER ENCODING 'UTF-8';",
+          "SELECT * FROM product_full LIMIT 3;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "098",
+      "python": {
+        "code_cells": [
+          "# コード例1（後から項目名をつける）\n# 解答ファイルの置き場所が設問ファイルと異なるため、パスが'../data'となっている点に注意\ndf_product_full = pd.read_csv(\n    \"../data/P_df_product_full_UTF-8_noh.csv\",\n    dtype={1: str, 2: str, 3: str},\n    encoding=\"UTF-8\",\n    header=None,\n)\n\ndf_product_full.columns = [\n    \"product_cd\",\n    \"category_major_cd\",\n    \"category_medium_cd\",\n    \"category_small_cd\",\n    \"unit_price\",\n    \"unit_cost\",\n    \"category_major_name\",\n    \"category_medium_name\",\n    \"category_small_name\",\n]\n\ndf_product_full.head(3)",
+          "# コード例2（先に項目名を定義する）\nc_names = [\n    \"product_cd\",\n    \"category_major_cd\",\n    \"category_medium_cd\",\n    \"category_small_cd\",\n    \"unit_price\",\n    \"unit_cost\",\n    \"category_major_name\",\n    \"category_medium_name\",\n    \"category_small_name\",\n]\n\ndf_product_full = pd.read_csv(\n    \"../data/P_df_product_full_UTF-8_noh.csv\",\n    names=c_names,\n    dtype={\n        \"category_major_cd\": str,\n        \"category_medium_cd\": str,\n        \"category_small_cd\": str,\n    },\n    encoding=\"UTF-8\",\n    header=None,\n)\n\ndf_product_full.head(3)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "DROP TABLE IF EXISTS product_full;\nCREATE TABLE product_full (\n        product_cd           VARCHAR(10),\n        category_major_cd    VARCHAR(2),\n        category_major_name  VARCHAR(20),\n        category_medium_cd   VARCHAR(4),\n        category_medium_name VARCHAR(20),\n        category_small_cd    VARCHAR(6),\n        category_small_name  VARCHAR(20),\n        unit_price           INTEGER,\n        unit_cost            INTEGER\n);",
+          "COPY product_full FROM '/tmp/data/S_product_full_UTF-8_noh.csv' \nWITH CSV ENCODING 'UTF-8';",
+          "SELECT * FROM product_full LIMIT 3;"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "099",
+      "python": {
+        "code_cells": [
+          "# 解答ファイルの置き場所が設問ファイルと異なるため、パスが'../data'となっている点に注意\ndf_product_full.to_csv(\n    \"../data/P_df_product_full_UTF-8_header.tsv\",\n    sep=\"\\t\",\n    encoding=\"UTF-8\",\n    index=False,\n)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "COPY product_full TO '/tmp/data/S_product_full_UTF-8_header.tsv' \nWITH CSV HEADER DELIMITER E'\\t' ENCODING 'UTF-8';"
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "100",
+      "python": {
+        "code_cells": [
+          "# コード例1（read_table）\n# 解答ファイルの置き場所が設問ファイルと異なるため、パスが'../data'となっている点に注意\ndf_product_full = pd.read_table(\n    \"../data/P_df_product_full_UTF-8_header.tsv\",\n    dtype={\n        \"category_major_cd\": str,\n        \"category_medium_cd\": str,\n        \"category_small_cd\": str,\n    },\n    encoding=\"UTF-8\",\n)\ndf_product_full.head(3)",
+          "# コード例2（read_csv）\ndf_product_full = pd.read_csv(\n    \"../data/P_df_product_full_UTF-8_header.tsv\",\n    dtype={\n        \"category_major_cd\": str,\n        \"category_medium_cd\": str,\n        \"category_small_cd\": str,\n    },\n    sep=\"\\t\",\n    encoding=\"UTF-8\",\n)\ndf_product_full.head(3)"
+        ],
+        "notes": []
+      },
+      "sql": {
+        "code_cells": [
+          "DROP TABLE IF EXISTS product_full;\nCREATE TABLE product_full (\n        product_cd           VARCHAR(10),\n        category_major_cd    VARCHAR(2),\n        category_major_name  VARCHAR(20),\n        category_medium_cd   VARCHAR(4),\n        category_medium_name VARCHAR(20),\n        category_small_cd    VARCHAR(6),\n        category_small_name  VARCHAR(20),\n        unit_price           INTEGER,\n        unit_cost            INTEGER\n);",
+          "COPY product_full FROM '/tmp/data/S_product_full_UTF-8_header.tsv' \nWITH CSV HEADER DELIMITER E'\\t' ENCODING 'UTF-8';",
+          "SELECT * FROM product_full LIMIT 3;"
+        ],
+        "notes": []
+      }
+    }
+  ],
+  "interludes": {
+    "python": [
+      {
+        "after": "088",
+        "statement": "df_customer_1, df_customer_nは使わないので削除する。",
+        "code_cells": [
+          "del df_customer_1\ndel df_customer_n"
+        ]
+      }
+    ],
+    "sql": []
+  }
+}

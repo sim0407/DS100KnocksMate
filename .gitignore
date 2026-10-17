@@ -1,0 +1,36 @@
+# --- 学習履歴・ユーザーデータ（絶対にcommitしない） ---
+/var/
+*.sqlite
+*.sqlite3
+*.db
+progress/
+
+# --- 秘密情報 ---
+.env
+.env.*
+!.env.example
+secrets/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.egg-info/
+build/
+dist/
+
+# --- 作業用 ---
+.ipynb_checkpoints/
+/tmp/
+/scratch/
+
+# --- OS / エディタ ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

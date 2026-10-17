@@ -57,7 +57,7 @@ Docker未導入のため、Docker不要の 0-A を先行し、Docker Desktop導�
 ### タスク
 
 - [x] Streamlitの問題選択UI、言語切替、コードエディタを実装。（`app/main.py`）
-- [x] Code Editorは導入前にメンテナンス状況と入力保持を確認。初期は `st.text_area` でもよい。（Phase 1 は `st.text_area`。専用エディタは後で評価）
+- [x] Code Editorは導入前にメンテナンス状況と入力保持を確認。初期は `st.text_area` でもよい。（Phase 1 は `st.text_area`。2026-10-18 に既存部品を評価のうえ自前の軽量エディタ `app/editor.py` を導入、`st.text_area` は切替可能な代替として残す）
 - [x] Python runnerの分離APIと出力JSON正規化を実装。
 - [x] SQL runnerをread-only Postgresで実装。
 - [x] 1問の検証器を作り、`実行` と `採点` を分離。（001〜005）

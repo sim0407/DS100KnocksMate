@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from functools import partial
 from pathlib import Path
@@ -19,11 +20,19 @@ import pandas as pd  # noqa: E402
 import streamlit as st  # noqa: E402
 
 from app.display import row_summary, to_dataframe  # noqa: E402
+from app.editor import code_editor  # noqa: E402
 from core.grading.grader import GradeResult  # noqa: E402
 from core.service import DISPLAY_MAX_ROWS, TrainerService  # noqa: E402
 
 LANGUAGE_LABELS = {"python": "Python", "sql": "SQL"}
 VIEW_LABELS = {"practice": "演習", "overview": "進捗一覧"}
+EDITOR_LABELS = {"editor": "コードエディタ", "plain": "シンプル"}
+# 既定の入力欄（環境変数で切替可。AppTest では独自部品を操作できないため plain を使う）
+DEFAULT_EDITOR = os.environ.get("KNOCKS_EDITOR", "editor")
+EDITOR_HELP = (
+    "Tab: インデント / Shift+Tab: インデントを戻す / Ctrl+Enter: 実行 / "
+    "Esc の後に Tab: 入力欄の外へ移動"
+)
 STATE_ICONS = {"passed": "✅", "in_progress": "✏️"}
 HINTS = {
     "python": (
@@ -57,6 +66,10 @@ def outcome_key(exercise_id: str, language: str) -> str:
     return f"outcome::{exercise_id}::{language}"
 
 
+def editor_key(exercise_id: str, language: str) -> str:
+    return f"editor::{exercise_id}::{language}"
+
+
 # ---------------------------------------------------------------- コールバック
 
 
@@ -66,20 +79,35 @@ def on_code_change(exercise_id: str, language: str) -> None:
     )
 
 
+def on_editor_change(exercise_id: str, language: str) -> None:
+    state = st.session_state.get(editor_key(exercise_id, language)) or {}
+    get_service().save_draft(exercise_id, language, state.get("value") or "")
+
+
+def on_editor_mode_change() -> None:
+    """入力欄を切り替えたら、画面側の入力状態を捨てて学習履歴DBから読み直す。"""
+    for key in [k for k in st.session_state if k.startswith(("code::", "editor::"))]:
+        del st.session_state[key]
+
+
 def on_review_change(exercise_id: str, language: str) -> None:
     flag = st.session_state[f"review::{exercise_id}::{language}"]
     get_service().progress.set_needs_review(exercise_id, language, flag)
 
 
 def go_to(exercise_id: str) -> None:
-    st.session_state["exercise_id"] = exercise_id
+    st.session_state["current_exercise"] = exercise_id
+
+
+def on_exercise_select() -> None:
+    st.session_state["current_exercise"] = st.session_state["exercise_id"]
 
 
 def on_overview_select(ids: list[str]) -> None:
     """進捗一覧の行を選んだら、その問題の演習画面を開く。"""
     rows = st.session_state["overview_table"]["selection"]["rows"]
     if rows:
-        st.session_state["exercise_id"] = ids[rows[0]]
+        st.session_state["current_exercise"] = ids[rows[0]]
         st.session_state["view"] = "practice"
 
 
@@ -186,6 +214,34 @@ def render_overview(service: TrainerService) -> None:
     st.caption("行を選ぶと、その問題の演習画面を開きます。")
 
 
+def code_input(service: TrainerService, exercise_id: str, language: str) -> tuple[str, bool]:
+    """(現在のコード, Ctrl+Enter で実行が要求されたか) を返す。"""
+    if st.session_state.get("editor_mode", DEFAULT_EDITOR) == "editor":
+        st.markdown("**コード**")
+        result = code_editor(
+            key=editor_key(exercise_id, language),
+            initial=service.draft(exercise_id, language),
+            language=language,
+            placeholder=PLACEHOLDERS[language],
+            on_change=partial(on_editor_change, exercise_id, language),
+        )
+        st.caption(EDITOR_HELP)
+        return result.code, result.run_requested
+
+    key = code_key(exercise_id, language)
+    if key not in st.session_state:
+        st.session_state[key] = service.draft(exercise_id, language)
+    st.text_area(
+        "コード",
+        key=key,
+        height=240,
+        placeholder=PLACEHOLDERS[language],
+        on_change=on_code_change,
+        args=(exercise_id, language),
+    )
+    return st.session_state[key], False
+
+
 def render_practice(service: TrainerService, exercise_id: str, language: str, order: list[str]):
     statuses = service.statuses()
     exercise = service.exercise(exercise_id)
@@ -206,17 +262,7 @@ def render_practice(service: TrainerService, exercise_id: str, language: str, or
         st.info(f"採点基準: {spec.note}")
 
     # ---- コード入力
-    key = code_key(exercise_id, language)
-    if key not in st.session_state:
-        st.session_state[key] = service.draft(exercise_id, language)
-    st.text_area(
-        "コード",
-        key=key,
-        height=240,
-        placeholder=PLACEHOLDERS[language],
-        on_change=on_code_change,
-        args=(exercise_id, language),
-    )
+    code, run_shortcut = code_input(service, exercise_id, language)
     st.caption(HINTS[language])
 
     prev_id, next_id = service.neighbors(exercise_id, order)
@@ -246,9 +292,8 @@ def render_practice(service: TrainerService, exercise_id: str, language: str, or
         "復習対象にする", key=review_key, on_change=on_review_change, args=(exercise_id, language)
     )
 
-    code = st.session_state[key]
     okey = outcome_key(exercise_id, language)
-    if run_clicked:
+    if run_clicked or run_shortcut:
         with st.spinner("実行中…"):
             st.session_state[okey] = {
                 "mode": "run",
@@ -303,8 +348,14 @@ def main() -> None:
         order = (
             service.auto_gradable_ids(language) if auto_only else [e.id for e in service.exercises]
         )
-        if st.session_state.get("exercise_id") not in order:
-            st.session_state["exercise_id"] = order[0]
+        # 選択中の問題は current_exercise で保持する。選択欄のラベル（状態アイコン・言語別の
+        # 問題文）が変わると Streamlit がウィジェットを作り直して選択が先頭に戻るため、
+        # 描画前に毎回ウィジェットの値を current_exercise に合わせる。
+        current = st.session_state.get("current_exercise", order[0])
+        if current not in order:
+            current = order[0]
+        st.session_state["current_exercise"] = current
+        st.session_state["exercise_id"] = current
 
         def label(exercise_id: str) -> str:
             ex = service.exercise(exercise_id)
@@ -316,8 +367,21 @@ def main() -> None:
             )
             return f"{icon} {exercise_id} {ex.title(language, 24)}{unsupported}{review}"
 
-        exercise_id = st.selectbox("問題", order, format_func=label, key="exercise_id")
+        exercise_id = st.selectbox(
+            "問題", order, format_func=label, key="exercise_id", on_change=on_exercise_select
+        )
         st.caption("✅ 正解 / ✏️ 挑戦中 / ⬜ 未着手 / 🔖 復習対象")
+        if "editor_mode" not in st.session_state:
+            st.session_state["editor_mode"] = DEFAULT_EDITOR
+        st.radio(
+            "入力欄",
+            list(EDITOR_LABELS),
+            format_func=EDITOR_LABELS.get,
+            horizontal=True,
+            key="editor_mode",
+            on_change=on_editor_mode_change,
+            help="コードエディタ: Tabでインデント、行番号、Ctrl+Enterで実行。うまく動かない場合はシンプルに切り替えてください。",
+        )
 
     if view == "overview":
         render_overview(service)
@@ -327,7 +391,7 @@ def main() -> None:
     st.divider()
     st.caption(ATTRIBUTION)
     st.caption(
-        f"表示は最大{DISPLAY_MAX_ROWS}行。入力したコードは自動保存されます（入力欄から離れたとき、または Ctrl+Enter）。"
+        f"表示は最大{DISPLAY_MAX_ROWS}行。入力したコードは自動保存されます（入力欄から離れたとき・入力が止まったとき・実行時）。"
     )
 
 

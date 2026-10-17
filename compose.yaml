@@ -16,7 +16,8 @@ services:
       dockerfile: docker/app/Dockerfile
       target: base
     ports:
-      - "127.0.0.1:8501:8501"   # 自分のPCからのみアクセス可（LAN・インターネットには公開しない）
+      # 自分のPCからのみアクセス可（LAN・インターネットには公開しない）。ポートは KNOCKS_PORT で変更可
+      - "127.0.0.1:${KNOCKS_PORT:-8501}:8501"
     environment:
       KNOCKS_WORKER_URL: "http://worker:8000"
       KNOCKS_DB_DSN: "host=db dbname=dsdojo_db user=knocks_learner password=knocks-learner-readonly"

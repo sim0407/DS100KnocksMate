@@ -35,10 +35,17 @@
    初回は数分かかります。2回目以降は数十秒で起動します。
 3. ブラウザで **http://127.0.0.1:8501** を開きます。
 
+ポート 8501 がほかのアプリで使われている場合は、`KNOCKS_PORT` で変更できます（例: PowerShell なら `$env:KNOCKS_PORT=8600; docker compose up -d --build` → http://127.0.0.1:8600）。
+
 ## 使い方
 
 1. 左のサイドバーで **言語（Python / SQL）** と **問題** を選びます。
-2. 問題文を読み、「コード」欄に解答を書きます。
+2. 問題文を読み、「コード」欄に解答を書きます。入力欄では次のキーが使えます。
+   - **Tab** / **Shift+Tab**: インデント / インデントを戻す（複数行を選んでまとめて変更も可）
+   - **Enter**: 前の行のインデントを引き継ぎます（Python で `:` で終わる行の次は1段下げます）
+   - **Ctrl+Enter**（Mac は Cmd+Enter）: 実行
+   - **Esc の後に Tab**: 入力欄の外へフォーカスを移動
+   - うまく動かない場合は、サイドバーの「入力欄」を「シンプル」に切り替えてください。
    - **Python**: 最後の行に書いた式の値が結果として表示されます（Jupyter と同じ）。`df_receipt` などのデータは最初から使えます。
    - **SQL**: SELECT 文（WITH 句を含む）を1つ書きます。データベースは読み取り専用なので、壊れる心配はありません。
 3. **▶ 実行** で結果を確認し、納得したら **✔ 採点** を押します（実行だけでは正解になりません）。
@@ -46,7 +53,7 @@
 5. 「次へ →」で次の問題に進みます。サイドバーの印は ✅ 正解 / ✏️ 挑戦中 / ⬜ 未着手 / 🔖 復習対象 です。
 6. サイドバーの「表示」で **進捗一覧** に切り替えると、全問題の状態を Python / SQL 別に確認できます（行を選ぶとその問題を開きます）。「自動採点に対応している問題だけ表示」で一覧を絞り込めます。
 
-コードは入力欄から離れたとき（または Ctrl+Enter）に自動保存されます。
+コードは、入力欄から離れたとき・入力が1.5秒止まったとき・実行や採点をしたときに自動保存されます。
 
 ## 終了する・再開する
 
@@ -108,12 +115,14 @@ docker run --rm --init knocks-worker:test              # ワーカー単体テ�
 uv run python -m tools.extract_problems                # 同梱教材から問題カタログを再生成
 ```
 
-E2E確認（学習履歴を書き換えるため、E2E用のプロジェクト名で実行）:
+E2E確認（学習履歴を書き換えるため、E2E用のプロジェクト名・ポートで実行）:
 
 ```bash
-docker compose -p ds100knocks-e2e up -d --build --wait
+KNOCKS_PORT=8502 docker compose -p ds100knocks-e2e up -d --build --wait
+uv sync --group e2e && uv run --group e2e playwright install chromium   # 初回のみ
+KNOCKS_E2E_URL=http://127.0.0.1:8502 uv run --group e2e pytest tests/e2e -m e2e   # 実ブラウザ
 docker compose -p ds100knocks-e2e exec -T app python - solve  < tests/e2e/ui_session.py
-docker compose -p ds100knocks-e2e down && docker compose -p ds100knocks-e2e up -d --wait
+docker compose -p ds100knocks-e2e down && KNOCKS_PORT=8502 docker compose -p ds100knocks-e2e up -d --wait
 docker compose -p ds100knocks-e2e exec -T app python - verify < tests/e2e/ui_session.py
 docker compose -p ds100knocks-e2e down -v
 ```
@@ -122,7 +131,7 @@ docker compose -p ds100knocks-e2e down -v
 
 | ディレクトリ | 内容 |
 | --- | --- |
-| `app/` | Streamlit UI |
+| `app/` | Streamlit UI（`editor.py` はコード入力用の軽量エディタ） |
 | `core/` | 問題カタログ・実行クライアント・採点・学習履歴（UI非依存） |
 | `worker/` | 学習者の Python を隔離実行するワーカー |
 | `docker/` | 各コンテナの Dockerfile、教材DBの初期化SQL |

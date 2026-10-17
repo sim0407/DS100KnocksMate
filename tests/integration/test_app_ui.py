@@ -24,6 +24,9 @@ pytestmark = [
 def progress_db(tmp_path, monkeypatch):
     path = tmp_path / "progress.sqlite3"
     monkeypatch.setenv("KNOCKS_PROGRESS_DB", str(path))
+    # AppTest は独自部品（コードエディタ）を操作できないため、シンプル入力欄で操作する。
+    # コードエディタ自体は tests/e2e/test_editor_browser.py（実ブラウザ）で確認する。
+    monkeypatch.setenv("KNOCKS_EDITOR", "plain")
     return path
 
 
@@ -153,3 +156,23 @@ def test_auto_only_filter_limits_list_and_navigation(progress_db):
     assert all("採点未対応" not in o for o in options)
     at.button(key="next").click().run()
     assert at.subheader[0].value == "P-017"  # 011〜016 は未対応のため飛ばす
+
+
+def test_default_editor_mode_renders_without_error(tmp_path, monkeypatch):
+    """既定（コードエディタ）でもページがエラーなく表示される。"""
+    monkeypatch.setenv("KNOCKS_PROGRESS_DB", str(tmp_path / "p.sqlite3"))
+    monkeypatch.delenv("KNOCKS_EDITOR", raising=False)
+    at = start()
+    assert at.radio(key="editor_mode").value == "editor"
+    assert at.subheader[0].value == "P-001"
+
+
+def test_selection_survives_language_switch_and_label_change(progress_db):
+    """選択欄のラベルが変わっても（言語切替・状態変化）、選んだ問題が維持される。"""
+    at = start()
+    at.selectbox(key="exercise_id").set_value("008").run()
+    at.text_area(key="code::008::python").input("x = 1").run()  # ⬜ → ✏️ にラベルが変わる
+    at.radio(key="language").set_value("sql").run()
+    assert at.subheader[0].value == "S-008"
+    at.radio(key="language").set_value("python").run()
+    assert at.subheader[0].value == "P-008"

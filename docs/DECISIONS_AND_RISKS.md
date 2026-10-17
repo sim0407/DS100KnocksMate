@@ -80,6 +80,9 @@
 - **採点定義の形式**: 設計書の YAML 案ではなく TOML（`exercises/problems/<id>.toml`、標準ライブラリ `tomllib` で読めて依存が増えずコメントも書ける）。キー: strategy / reference / rows / n / sort_keys / column_order / column_names / float_decimals / reason / note。未知のキーはエラー。
 - **Phase 2 で追加した採点ルール**: 列名を問わない位置照合（`column_names=false`）、1行1列の表を値として採点、学習者向けの採点基準注記（`note`）。020（ROW_NUMBER）・029（最頻値）は正解が一意でないため理由付き manual_review。
 - **参照結果の照合の自動化**: `tests/integration/test_reference_crosscheck.py` で、自動採点する全問題の模範解答の結果を上流解答Notebookの保存出力（Python: 行数/値、SQL: rows affected）と照合する。
+- **コードエディタ（2026-10-18）**: 既存部品を評価（streamlit-ace: 2021年で停止、streamlit-code-editor: 2024年12月以降更新なし・PyPIにライセンス表記なし、streamlit-monaco: 2023年・Monacoは既定でCDN読込の恐れ、streamlit-monaco-editor: 実績少・CDN未確認）し、いずれも採用せず、Streamlit 1.66 の `st.components.v2` で **依存・CDNなしの自前エディタ**（`app/editor.py`）を実装。Tab/Shift+Tab、自動インデント、行番号、Ctrl+Enter実行、Esc→Tabでフォーカス移動、`execCommand('insertText')` で元に戻すを維持。`setStateValue` は呼ぶたびにスクリプトを再実行するため、送信は「入力欄から離れたとき・Ctrl+Enter・入力停止1.5秒後」。シンタックスハイライトは未対応。標準 `st.text_area`（シンプル）にサイドバーで切替可能。
+- **ブラウザE2E**: AppTest は独自部品を操作できないため、Playwright（`e2e` 依存グループ、Chromium）で実ブラウザ確認（`tests/e2e/test_editor_browser.py`）。この過程で「選択欄のラベル変化でウィジェットが作り直され選択問題が001に戻る」不具合を発見し、`current_exercise` で選択を保持する方式に修正。
+- **公開ポート**: `KNOCKS_PORT`（既定8501、常に 127.0.0.1 のみ）。E2E は 8502 で並行実行。
 - **pyarrow**: 当面入れない（pandas 3 の文字列型はPython実装で動作）。性能問題が出たら再検討。
 - **自作部分のライセンス**: MITを第一候補（Phase 4で最終確認）。名称は仮称のまま（リポジトリ名 `DS100KnocksMate` / 文書上の「100 Knocks Trainer」の統一はPhase 4）。
 

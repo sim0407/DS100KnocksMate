@@ -1,0 +1,21 @@
+# P-007 / S-007: 顧客ID "CS018205000001" かつ 売上金額1,000以上2,000以下
+id = "007"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "unordered"
+reference = '''
+df_receipt[["sales_ymd", "customer_id", "product_cd", "amount"]].query(
+    'customer_id == "CS018205000001" & 1000 <= amount <= 2000'
+)
+'''
+
+[sql]
+strategy = "table"
+rows = "unordered"
+reference = '''
+SELECT sales_ymd, customer_id, product_cd, amount
+FROM receipt
+WHERE customer_id = 'CS018205000001' AND amount BETWEEN 1000 AND 2000
+'''

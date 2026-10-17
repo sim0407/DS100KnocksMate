@@ -1,6 +1,8 @@
 """表・スカラーの比較器。
 
 採点ルール（docs/PRODUCT_REQUIREMENTS.md §9.2）:
+列は既定で名前・順序とも一致が必要。column_names=False なら名前を問わず位置で対応づける。
+
 - unordered: 行の多重集合が一致（重複を保持、行順は問わない）
 - ordered:   行の並びまで一致
 - sorted:    多重集合が一致し、学習者の結果が sort_keys の順に並んでいる（同順位内は問わない）
@@ -17,7 +19,7 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Literal
 
 from core.execution.results import (
@@ -58,6 +60,8 @@ class TableSpec:
     sort_keys: tuple[SortKey, ...] = ()
     n: int | None = None
     column_order: bool = True
+    # False: 列名を問わず位置で対応づける（問題文が列名を指定しない集計など）。列の数と順序は一致が必要
+    column_names: bool = True
     float_decimals: int = 6
 
     def __post_init__(self) -> None:
@@ -153,6 +157,16 @@ def compare_tables(
             [f"結果が大きすぎるため採点できません（{actual.row_count}行）"],
             gradable=False,
         )
+
+    if not spec.column_names:
+        if len(actual.columns) != len(expected.columns):
+            return Comparison(
+                False,
+                [
+                    f"列の数が違います（期待: {len(expected.columns)}列 / 実際: {len(actual.columns)}列）"
+                ],
+            )
+        actual = replace(actual, columns=list(expected.columns))
 
     reasons = _check_columns(expected, actual, spec)
     if reasons:

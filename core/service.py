@@ -59,10 +59,14 @@ class TrainerService:
     def exercise(self, exercise_id: str) -> Exercise:
         return self._index[exercise_id]
 
-    def neighbors(self, exercise_id: str) -> tuple[str | None, str | None]:
-        i = self._order.index(exercise_id)
-        prev_id = self._order[i - 1] if i > 0 else None
-        next_id = self._order[i + 1] if i + 1 < len(self._order) else None
+    def neighbors(
+        self, exercise_id: str, order: list[str] | None = None
+    ) -> tuple[str | None, str | None]:
+        """前後の問題ID。order を渡すとその並び（絞り込み後の一覧など）の中で探す。"""
+        order = order or self._order
+        i = order.index(exercise_id)
+        prev_id = order[i - 1] if i > 0 else None
+        next_id = order[i + 1] if i + 1 < len(order) else None
         return prev_id, next_id
 
     # ------------------------------------------------------------ 草稿・進捗
@@ -79,6 +83,23 @@ class TrainerService:
 
     def passed_count(self, language: str) -> int:
         return self.progress.summary().get(language, {}).get("passed", 0)
+
+    def auto_gradable_ids(self, language: str) -> list[str]:
+        return [e.id for e in self.exercises if e.grading[language].strategy != "manual_review"]
+
+    def overview(self) -> list[dict]:
+        """進捗一覧用: 問題ごとの言語別の状態・自動採点対応・復習フラグ。"""
+        statuses = self.statuses()
+        rows = []
+        for e in self.exercises:
+            row: dict = {"id": e.id, "title": e.title("python", 60)}
+            for lang in ("python", "sql"):
+                status = statuses.get((e.id, lang))
+                row[f"{lang}_state"] = status.state if status else "not_started"
+                row[f"{lang}_review"] = bool(status and status.needs_review)
+                row[f"{lang}_auto"] = e.grading[lang].strategy != "manual_review"
+            rows.append(row)
+        return rows
 
     # ------------------------------------------------------------ 実行・採点
 

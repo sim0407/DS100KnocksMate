@@ -1,0 +1,16 @@
+# P-009 / S-009: not(A or B) を AND で書き換える（ド・モルガン）
+# 結果のみで判定するため、元の OR の式のままでも正解になる（限界を note で明示）。
+id = "009"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "unordered"
+reference = '''df_store.query('not(prefecture_cd == "13" | floor_area > 900)')'''
+note = "結果のみで判定します（ANDを使って書き換えたかどうかは判定しません）。"
+
+[sql]
+strategy = "table"
+rows = "unordered"
+reference = "SELECT * FROM store WHERE NOT (prefecture_cd = '13' OR floor_area > 900)"
+note = "結果のみで判定します（ANDを使って書き換えたかどうかは判定しません）。"

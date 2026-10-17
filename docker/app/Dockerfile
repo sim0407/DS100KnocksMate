@@ -40,6 +40,8 @@ COPY docker/worker/requirements-test.txt /tmp/requirements-test.txt
 RUN pip install --no-cache-dir --require-hashes -r /tmp/requirements-test.txt \
     && rm /tmp/requirements-test.txt
 COPY pyproject.toml /opt/knocks/pyproject.toml
+# 参照結果を上流Notebookの保存出力と照合するテスト用（本番イメージには含めない）
+COPY upstream/100knocks-preprocess/docker/work/answer/ /opt/knocks/upstream/100knocks-preprocess/docker/work/answer/
 COPY tests/ /opt/knocks/tests/
 USER 10001:10001
 CMD ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider", "-m", "integration", "tests/integration"]

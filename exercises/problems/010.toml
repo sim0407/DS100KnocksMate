@@ -1,0 +1,15 @@
+# P-010 / S-010: 店舗コードが "S14" で始まる店舗の全項目を10件（先頭N件ルール）
+id = "010"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+reference = '''df_store.query("store_cd.str.startswith('S14')", engine="python")'''
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+reference = "SELECT * FROM store WHERE store_cd LIKE 'S14%'"

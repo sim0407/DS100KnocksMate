@@ -1,0 +1,17 @@
+# P-018 / S-018: 生年月日で若い順（降順）にソートし先頭10件
+id = "018"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "top_n"
+n = 10
+sort_keys = [{ column = "birth_day", descending = true }]
+reference = "df_customer"
+
+[sql]
+strategy = "table"
+rows = "top_n"
+n = 10
+sort_keys = [{ column = "birth_day", descending = true }]
+reference = "SELECT * FROM customer"

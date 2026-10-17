@@ -71,6 +71,13 @@ def _table(result: dict) -> TableResult:
     )
 
 
+def _as_scalar(result: dict) -> dict:
+    """1行1列の表（SQLの `SELECT COUNT(*) ...` 等）は値として扱う。それ以外はそのまま。"""
+    if result.get("type") == "table" and len(result["columns"]) == 1 and result["row_count"] == 1:
+        return {"type": "scalar", "value": result["rows"][0][0], "kind": result["kinds"][0]}
+    return result
+
+
 def grade(
     exercise: Exercise, language: str, code: str, runner: Runner, cache: ReferenceCache
 ) -> GradeResult:
@@ -102,6 +109,8 @@ def grade(
         )
 
     expected_type = "table" if spec.strategy == "table" else "scalar"
+    if expected_type == "scalar":
+        result, reference = _as_scalar(result), _as_scalar(reference)
     if result.get("type") != expected_type or reference.get("type") != expected_type:
         want = _RESULT_LABEL[expected_type]
         got = _RESULT_LABEL.get(result.get("type", ""), "不明")

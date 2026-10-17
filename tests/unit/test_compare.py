@@ -322,3 +322,35 @@ def test_compare_scalars(expected, actual, passed):
 )
 def test_infer_kind(values, kind):
     assert infer_kind(values) == kind
+
+
+# ---------------------------------------------------------------- 列名を問わない比較
+
+
+def test_column_names_can_be_ignored_and_matched_by_position():
+    expected = table(["store_cd", "amount"], [["S1", 10], ["S2", 20]])
+    actual = table(["store_cd", "sum"], [["S2", 20], ["S1", 10]])
+    assert not compare_tables(expected, actual).passed
+    assert compare_tables(expected, actual, TableSpec(column_names=False)).passed
+
+
+def test_column_names_ignored_still_requires_same_column_count():
+    expected = table(["a", "b"], [[1, 2]])
+    result = compare_tables(expected, table(["a"], [[1]]), TableSpec(column_names=False))
+    assert not result.passed
+    assert any("列の数" in r for r in result.reasons)
+
+
+def test_column_names_ignored_still_checks_position_order():
+    expected = table(["store_cd", "amount"], [["S1", 10]])
+    swapped = table(["amount", "store_cd"], [[10, "S1"]])
+    assert not compare_tables(expected, swapped, TableSpec(column_names=False)).passed
+
+
+def test_top_n_with_positional_columns_uses_expected_sort_key_names():
+    spec = TableSpec(
+        rows="top_n", n=2, sort_keys=(SortKey("avg", descending=True),), column_names=False
+    )
+    universe = table(["store_cd", "avg"], [["S1", 3.5], ["S2", 2.5], ["S3", 1.0]])
+    actual = table(["store_cd", "avg_amount"], [["S1", 3.5], ["S2", 2.5]])
+    assert compare_tables(universe, actual, spec).passed

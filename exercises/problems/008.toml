@@ -1,0 +1,21 @@
+# P-008 / S-008: 顧客ID "CS018205000001" かつ 商品コードが "P071401019" 以外
+id = "008"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "unordered"
+reference = '''
+df_receipt[["sales_ymd", "customer_id", "product_cd", "amount"]].query(
+    'customer_id == "CS018205000001" & product_cd != "P071401019"'
+)
+'''
+
+[sql]
+strategy = "table"
+rows = "unordered"
+reference = '''
+SELECT sales_ymd, customer_id, product_cd, amount
+FROM receipt
+WHERE customer_id = 'CS018205000001' AND product_cd != 'P071401019'
+'''

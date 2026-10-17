@@ -1,0 +1,21 @@
+# P-006 / S-006: 顧客ID "CS018205000001" かつ（売上金額1,000以上 または 売上数量5以上）、指定5列
+id = "006"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "unordered"
+reference = '''
+df_receipt[["sales_ymd", "customer_id", "product_cd", "quantity", "amount"]].query(
+    'customer_id == "CS018205000001" & (amount >= 1000 | quantity >= 5)'
+)
+'''
+
+[sql]
+strategy = "table"
+rows = "unordered"
+reference = '''
+SELECT sales_ymd, customer_id, product_cd, quantity, amount
+FROM receipt
+WHERE customer_id = 'CS018205000001' AND (amount >= 1000 OR quantity >= 5)
+'''

@@ -39,6 +39,8 @@ _SPEC_LANG_KEYS = {
     "column_order",
     "float_decimals",
     "reason",
+    "column_names",
+    "note",
 }
 _ROW_MODES = ("unordered", "ordered", "sorted", "subset_n", "top_n")
 
@@ -51,7 +53,8 @@ class GradingSpec:
     )
     table: TableSpec | None = None
     float_decimals: int = 6
-    reason: str = ""
+    reason: str = ""  # manual_review の理由（学習者に表示）
+    note: str = ""  # 採点基準の補足（例: 列名は問いません）。学習者に表示
 
 
 UNSUPPORTED = GradingSpec("manual_review", reason=UNSUPPORTED_REASON)
@@ -77,8 +80,12 @@ def _parse_language(lang: str, data: dict[str, Any]) -> GradingSpec:
     if unknown:
         raise ValueError(f"[{lang}] 不明なキー: {', '.join(sorted(unknown))}")
     strategy = data.get("strategy")
+    note = str(data.get("note", "")).strip()
     if strategy == "manual_review":
-        return GradingSpec("manual_review", reason=data.get("reason", UNSUPPORTED_REASON))
+        reason = str(data.get("reason", "")).strip()
+        if not reason:
+            raise ValueError(f"[{lang}] manual_review には reason（学習者に表示する理由）が必要")
+        return GradingSpec("manual_review", reason=reason, note=note)
     if strategy not in ("table", "scalar"):
         raise ValueError(f"[{lang}] strategy の値が不正: {strategy!r}")
     reference = data.get("reference")
@@ -86,7 +93,9 @@ def _parse_language(lang: str, data: dict[str, Any]) -> GradingSpec:
         raise ValueError(f"[{lang}] reference（参照結果を作るコード）が必要")
     float_decimals = int(data.get("float_decimals", 6))
     if strategy == "scalar":
-        return GradingSpec("scalar", reference=reference.strip(), float_decimals=float_decimals)
+        return GradingSpec(
+            "scalar", reference=reference.strip(), float_decimals=float_decimals, note=note
+        )
 
     rows = data.get("rows", "unordered")
     if rows not in _ROW_MODES:
@@ -99,10 +108,11 @@ def _parse_language(lang: str, data: dict[str, Any]) -> GradingSpec:
         sort_keys=sort_keys,
         n=data.get("n"),
         column_order=bool(data.get("column_order", True)),
+        column_names=bool(data.get("column_names", True)),
         float_decimals=float_decimals,
     )
     return GradingSpec(
-        "table", reference=reference.strip(), table=table, float_decimals=float_decimals
+        "table", reference=reference.strip(), table=table, float_decimals=float_decimals, note=note
     )
 
 

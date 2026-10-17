@@ -147,3 +147,20 @@ def test_scalar_strategy():
     scalar = {"status": "ok", "result": {"type": "scalar", "value": 10, "kind": "integer"}}
     runner = FakeRunner({"REF": scalar, "mine": scalar})
     assert grade(ex, "python", "mine", runner, ReferenceCache()).status == "passed"
+
+
+def test_scalar_strategy_accepts_one_by_one_table():
+    """SQLの `SELECT COUNT(*) ...` は1行1列の表で返るため、値として扱う（列名は問わない）。"""
+    ex = exercise(GradingSpec("scalar", reference="REF"))
+    ref = table(["count"], [[104681]])
+    mine = table(["cnt"], [[104681]])
+    runner = FakeRunner({"REF": ref, "mine": mine})
+    assert grade(ex, "sql", "mine", runner, ReferenceCache()).status == "passed"
+
+
+def test_scalar_strategy_rejects_multi_row_table():
+    ex = exercise(GradingSpec("scalar", reference="REF"))
+    runner = FakeRunner({"REF": table(["n"], [[1]]), "mine": table(["n"], [[1], [2]])})
+    result = grade(ex, "sql", "mine", runner, ReferenceCache())
+    assert result.status == "failed"
+    assert "1つの値" in result.feedback[0]

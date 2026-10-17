@@ -1,0 +1,11 @@
+# P-022 / S-022: 顧客IDのユニーク件数
+id = "022"
+status = "verified"
+
+[python]
+strategy = "scalar"
+reference = 'df_receipt["customer_id"].nunique()'
+
+[sql]
+strategy = "scalar"
+reference = "SELECT COUNT(DISTINCT customer_id) FROM receipt"

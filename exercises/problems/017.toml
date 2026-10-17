@@ -1,0 +1,17 @@
+# P-017 / S-017: 生年月日で高齢順（昇順）にソートし先頭10件（上位N件。境界の同順位はどの行でもよい）
+id = "017"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "top_n"
+n = 10
+sort_keys = [{ column = "birth_day" }]
+reference = "df_customer"
+
+[sql]
+strategy = "table"
+rows = "top_n"
+n = 10
+sort_keys = [{ column = "birth_day" }]
+reference = "SELECT * FROM customer"

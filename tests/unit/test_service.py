@@ -112,3 +112,24 @@ def test_neighbors(service):
     assert service.neighbors("001") == (None, "002")
     assert service.neighbors("050") == ("049", "051")
     assert service.neighbors("100") == ("099", None)
+    assert service.neighbors("005", ["001", "005", "009"]) == ("001", "009")
+
+
+def test_overview_rows(service):
+    service.grade("001", "python", "df_receipt.head(10)")
+    service.save_draft("002", "sql", "SELECT")
+    service.progress.set_needs_review("003", "python", True)
+    rows = {r["id"]: r for r in service.overview()}
+    assert len(rows) == 100
+    assert rows["001"]["python_state"] == "passed"
+    assert rows["001"]["sql_state"] == "not_started"
+    assert rows["002"]["sql_state"] == "in_progress"
+    assert rows["003"]["python_review"] is True
+    assert rows["001"]["python_auto"] is True
+    assert rows["100"]["python_auto"] is False
+    assert rows["001"]["title"].startswith("レシート明細データ")
+
+
+def test_auto_gradable_ids(service):
+    ids = service.auto_gradable_ids("python")
+    assert "001" in ids and "100" not in ids and "020" not in ids

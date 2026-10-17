@@ -118,3 +118,38 @@ def test_draft_and_pass_survive_restart(progress_db):
     assert "✅ 001" in restarted.selectbox(key="exercise_id").format_func("001")
     restarted.radio(key="language").set_value("sql").run()
     assert restarted.text_area(key="code::001::sql").value == "SELECT 1"
+
+
+def test_grading_note_is_shown(progress_db):
+    at = start()
+    at.selectbox(key="exercise_id").set_value("009").run()
+    assert "結果のみで判定" in texts(at.info)
+
+
+def test_manual_review_problem_reason_is_shown(progress_db):
+    at = start()
+    at.selectbox(key="exercise_id").set_value("020").run()
+    assert "複数の正解" in texts(at.warning)
+
+
+def test_overview_page(progress_db):
+    at = start()
+    at.text_area(key="code::001::python").input("df_receipt.head(10)").run()
+    at.button(key="grade").click().run()
+    at.radio(key="view").set_value("overview").run()
+    assert not at.exception
+    table = at.dataframe[0].value
+    assert len(table) == 100
+    assert table.iloc[0]["Python"] == "✅ 正解"
+    assert "採点未対応" in table.iloc[99]["SQL"]
+    assert "1 / 100" in texts(at.metric)
+
+
+def test_auto_only_filter_limits_list_and_navigation(progress_db):
+    at = start()
+    at.selectbox(key="exercise_id").set_value("010").run()
+    at.checkbox(key="auto_only").check().run()
+    options = at.selectbox(key="exercise_id").options
+    assert all("採点未対応" not in o for o in options)
+    at.button(key="next").click().run()
+    assert at.subheader[0].value == "P-017"  # 011〜016 は未対応のため飛ばす

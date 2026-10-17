@@ -133,3 +133,29 @@ def test_every_spec_file_is_valid_and_matches_a_problem(exercises):
     assert files, "採点定義ファイルがない"
     for path in files:
         assert path.stem in ids
+
+
+def test_parse_column_names_and_note():
+    _, grading = parse(
+        """
+id = "001"
+status = "verified"
+[sql]
+strategy = "table"
+reference = "SELECT 1"
+column_names = false
+note = "列名は問いません"
+[python]
+strategy = "scalar"
+reference = "1"
+note = "値だけを判定します"
+"""
+    )
+    assert grading["sql"].table.column_names is False
+    assert grading["sql"].note == "列名は問いません"
+    assert grading["python"].note == "値だけを判定します"
+
+
+def test_manual_review_spec_requires_reason():
+    with pytest.raises(ValueError, match="reason"):
+        parse('id = "001"\nstatus = "verified"\n[python]\nstrategy = "manual_review"')

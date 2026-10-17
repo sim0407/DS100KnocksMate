@@ -1,0 +1,32 @@
+# P-019 / S-019: 売上金額の高い順に同順位ありのランク（RANK / rank(method="min")）を付け上位10件
+# 順位の値も全件に対して正しいこと（参照の全結果に含まれること）を検証する。列名は問題文で指定されないため位置で照合。
+id = "019"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "top_n"
+n = 10
+sort_keys = [{ column = "amount", descending = true }]
+column_names = false
+note = "列名は問いません。顧客ID・売上金額・順位の順に出力してください。"
+reference = '''
+df_tmp = pd.concat(
+    [
+        df_receipt[["customer_id", "amount"]],
+        df_receipt["amount"].rank(method="min", ascending=False),
+    ],
+    axis=1,
+)
+df_tmp.columns = ["customer_id", "amount", "ranking"]
+df_tmp
+'''
+
+[sql]
+strategy = "table"
+rows = "top_n"
+n = 10
+sort_keys = [{ column = "amount", descending = true }]
+column_names = false
+note = "列名は問いません。顧客ID・売上金額・順位の順に出力してください。"
+reference = "SELECT customer_id, amount, RANK() OVER (ORDER BY amount DESC) AS ranking FROM receipt"

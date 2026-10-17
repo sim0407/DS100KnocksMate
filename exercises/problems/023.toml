@@ -1,0 +1,17 @@
+# P-023 / S-023: 店舗コードごとに売上金額と売上数量を合計（順序指定なし、列名は位置で照合）
+id = "023"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "unordered"
+column_names = false
+note = "列名は問いません。店舗コード・売上金額の合計・売上数量の合計の順に出力してください。"
+reference = 'df_receipt.groupby("store_cd").agg({"amount": "sum", "quantity": "sum"}).reset_index()'
+
+[sql]
+strategy = "table"
+rows = "unordered"
+column_names = false
+note = "列名は問いません。店舗コード・売上金額の合計・売上数量の合計の順に出力してください。"
+reference = "SELECT store_cd, SUM(amount) AS amount, SUM(quantity) AS quantity FROM receipt GROUP BY store_cd"

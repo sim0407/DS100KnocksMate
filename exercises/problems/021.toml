@@ -1,0 +1,11 @@
+# P-021 / S-021: レシート明細の件数（SQLの1行1列の結果は値として扱う）
+id = "021"
+status = "verified"
+
+[python]
+strategy = "scalar"
+reference = "len(df_receipt)"
+
+[sql]
+strategy = "scalar"
+reference = "SELECT COUNT(*) FROM receipt"

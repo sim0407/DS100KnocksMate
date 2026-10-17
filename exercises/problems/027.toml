@@ -1,0 +1,21 @@
+# P-027 / S-027: 店舗コードごとの売上金額の平均、降順TOP5（上位N件、小数は丸めて比較）
+id = "027"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "top_n"
+n = 5
+sort_keys = [{ column = "amount", descending = true }]
+column_names = false
+note = "列名は問いません。店舗コード・平均売上金額の順に出力してください。"
+reference = 'df_receipt.groupby("store_cd").agg({"amount": "mean"}).reset_index()'
+
+[sql]
+strategy = "table"
+rows = "top_n"
+n = 5
+sort_keys = [{ column = "avg_amount", descending = true }]
+column_names = false
+note = "列名は問いません。店舗コード・平均売上金額の順に出力してください。"
+reference = "SELECT store_cd, AVG(amount) AS avg_amount FROM receipt GROUP BY store_cd"

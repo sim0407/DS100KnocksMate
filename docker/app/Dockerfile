@@ -13,14 +13,24 @@ COPY docker/app/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir --require-hashes -r /tmp/requirements.txt \
     && rm /tmp/requirements.txt
 
+COPY .streamlit/ /opt/knocks/.streamlit/
 COPY core/ /opt/knocks/core/
+COPY app/ /opt/knocks/app/
 COPY exercises/ /opt/knocks/exercises/
 
-RUN useradd --uid 10001 --user-group --no-create-home --shell /usr/sbin/nologin knocks
+# 学習履歴（SQLite）は名前付きvolumeに置く。volume初期化時に所有者を引き継がせるため先に作成
+RUN useradd --uid 10001 --user-group --no-create-home --shell /usr/sbin/nologin knocks \
+    && mkdir -p /var/lib/knocks \
+    && chown 10001:10001 /var/lib/knocks
+ENV HOME=/tmp \
+    KNOCKS_PROGRESS_DB=/var/lib/knocks/progress.sqlite3
 USER 10001:10001
 
-# UIはPhase 1で追加する
-CMD ["python", "-c", "print('app: UI is not implemented yet (Phase 1)')"]
+EXPOSE 8501
+HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=5 \
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=3)"]
+# コンテナ内では全インターフェースで待ち受け、ホストへの公開は compose で 127.0.0.1 に限定する
+CMD ["streamlit", "run", "app/main.py", "--server.address=0.0.0.0"]
 
 
 # 統合テスト用ステージ（compose の tests サービスから DB・ワーカーに接続して実行）

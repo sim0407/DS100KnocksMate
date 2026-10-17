@@ -1,84 +1,131 @@
-# 100 Knocks Trainer — Claude Codeへの開発引き継ぎ
+# 100本ノック トレーナー（非公式）
 
-このフォルダは **開発開始用の設計・指示書セット** です。アプリの実装本体ではありません。
+「データサイエンス100本ノック（構造化データ加工編）」を、**自分のPCのブラウザで Python / SQL を書いて、その場で実行・自動採点・進捗保存**しながら解ける学習アプリです。
 
-## 目的
+- 自分のPCの中だけで動きます（アカウント不要、書いたコードを外部に送りません）
+- Python と SQL で同じ問題に別々に挑戦でき、進捗も言語ごとに記録されます
+- 書いたコードと正解状態は自動保存され、アプリを閉じても残ります
 
-データサイエンティスト協会の「データサイエンス100本ノック（構造化データ加工編）」を教材に、Python・SQLを実際に書いて学べる **ローカルWebアプリ** を構築し、GitHubで公開する。
+> 本アプリは一般社団法人データサイエンティスト協会の公式アプリではなく、承認・提携を受けたものでもありません。教材の出典は[下記](#出典ライセンス)を参照してください。
 
-重視する体験：①問題を読む → ②Python/SQLを書く → ③その場で実行結果を見る → ④自動採点する → ⑤解答と進捗を自動保存する。
+## 現在の対応状況（開発中）
 
-## このフォルダの使い方
-
-1. これらのファイルを新しい開発用フォルダのルートに展開する（`CLAUDE.md` をルートに置く）。
-2. そのフォルダで Claude Code を起動する。
-3. `START_PROMPT.md` の文章をClaude Codeへ貼り付ける。
-4. Claude Codeの最初の仕事は **公式リポジトリの調査・ライセンス確認・Phase 0の技術的検証**。設計・実装の判断はこのファイル群を正とする。
-5. 以後、マイルストーンごとに実装・テスト・成果報告を行う。
-
-まだ環境にDockerがない場合や、ネットワークが使えない場合は、その制約と未検証事項をClaude Codeに記録させる。確認していないことを「動作済み」と扱わない。
-
-## ファイルの案内
-
-| ファイル | 内容 |
+| 項目 | 状況 |
 | --- | --- |
-| `CLAUDE.md` | Claude Codeが常に従う開発方針と作業ルール |
-| `START_PROMPT.md` | Claude Codeの初回セッションに貼るプロンプト |
-| `docs/PRODUCT_REQUIREMENTS.md` | 機能・画面・MVPスコープ・受入条件 |
-| `docs/TECHNICAL_DESIGN.md` | アーキテクチャ、実行・採点・進捗・安全設計 |
-| `docs/IMPLEMENTATION_PLAN.md` | Phase 0〜4の作業と完了条件 |
-| `docs/DECISIONS_AND_RISKS.md` | 確定方針、保留事項、リスクと対策 |
-| `docs/UPSTREAM_SOURCE.md` | 教材の出典・ライセンス・取り込みルール |
-| `docs/SESSION_LOG.md` | 開発セッションをまたぐ記録（初期テンプレート） |
+| 問題文の表示 | 100問すべて |
+| 実行（Python / SQL） | 100問すべてで可能 |
+| 自動採点 | **問題 001〜005**（Python・SQL）。それ以外は「採点未対応」と表示され、正解扱いにはなりません |
+| 動作確認済みの環境 | Windows 11 + Docker Desktop（WSL2）。macOS は未確認 |
 
-## 目標とする技術スタック
+## 必要なもの
 
-- UI: Streamlit（コードエディタ用コンポーネントは実機で評価して選ぶ）
-- アプリ・採点: Python
-- SQL教材データベース: PostgreSQL（公式教材との互換性）
-- 学習履歴: SQLite（永続化）
-- 実行環境: Docker Compose（UI、Python実行ワーカー、PostgreSQLを分離）
-- テスト: pytest（ユニット・統合・必要最低限のE2E）
-- 配布: GitHubの公開リポジトリ、最終的には `docker compose up --build` など簡単な起動
+- **Docker Desktop**（[公式サイト](https://www.docker.com/products/docker-desktop/)からインストールし、起動しておく）
+- このリポジトリのファイル（`git clone` するか、GitHub の「Code → Download ZIP」で取得して展開）
+- ディスク空き容量: 数GB程度（初回にアプリの部品をダウンロード・組み立てるため）
 
-## 明確な非目標（初期段階）
+## 起動する
 
-- クラウドサービス、ログイン、複数ユーザー管理
-- R言語、AI採点・AI解説、スマホ向けUIの最適化
-- 100問全問の自動採点を最初の1回の実装で完成させること
-- 任意の第三者がインターネットからコードを投稿できる公開実行サービス
+1. Docker Desktop を起動し、画面左下が「Engine running」になるまで待ちます。
+2. このフォルダでターミナル（Windows なら PowerShell）を開き、次を実行します。
 
-## 公式教材
+   ```bash
+   docker compose up -d --build
+   ```
 
-- Repository: https://github.com/The-Japan-DataScientist-Society/100knocks-preprocess
-- 主な配置: `docker/work/`（設問Notebook）、`docker/work/answer/`（模範解答Notebook）、`docker/work/data/`（CSV）、`docker/db/init/`（DB初期化）
-- READMEによると原則MITライセンス。ただし `docker/doc/100knocks_guide.pdf` は CC BY-ND。詳細は `docs/UPSTREAM_SOURCE.md`。
+   初回は数分かかります。2回目以降は数十秒で起動します。
+3. ブラウザで **http://127.0.0.1:8501** を開きます。
 
-## 注意
+## 使い方
 
-この引き継ぎセットには、公式教材の問題本文・CSV・模範解答・実行可能なアプリは同梱していません。公式教材の確認・取り込みは、開発時にClaude Codeが実施します。教材を取り込む際は、出典・ライセンス・取得元のcommitを記録します。
+1. 左のサイドバーで **言語（Python / SQL）** と **問題** を選びます。
+2. 問題文を読み、「コード」欄に解答を書きます。
+   - **Python**: 最後の行に書いた式の値が結果として表示されます（Jupyter と同じ）。`df_receipt` などのデータは最初から使えます。
+   - **SQL**: SELECT 文（WITH 句を含む）を1つ書きます。データベースは読み取り専用なので、壊れる心配はありません。
+3. **▶ 実行** で結果を確認し、納得したら **✔ 採点** を押します（実行だけでは正解になりません）。
+4. 採点結果は「正解 / 不正解（理由つき）/ 自動採点できない / エラー」のいずれかで表示されます。
+5. 「次へ →」で次の問題に進みます。サイドバーの印は ✅ 正解 / ✏️ 挑戦中 / ⬜ 未着手 / 🔖 復習対象 です。
+
+コードは入力欄から離れたとき（または Ctrl+Enter）に自動保存されます。
+
+## 終了する・再開する
+
+```bash
+docker compose down        # 終了（学習履歴は残ります）
+docker compose up -d       # 再開（その後 http://127.0.0.1:8501 を開く）
+```
+
+> ⚠️ `docker compose down -v` のように **`-v` を付けると学習履歴も削除されます**。
+
+## 学習履歴の保存場所
+
+書いたコード・実行/採点の履歴・進捗は、Docker のボリューム **`ds100knocks_progress`** 内の SQLite ファイルに保存されます。このフォルダの中には保存されないため、Git にコミットされることもありません。
+
+## アップデートする
+
+新しい版のファイルを取得してから（`git pull` など）、次を実行します。学習履歴はそのまま引き継がれます。
+
+```bash
+docker compose up -d --build
+```
+
+## アンインストール
+
+```bash
+docker compose down -v --rmi local   # コンテナ・学習履歴・このアプリのイメージを削除
+```
+
+その後、このフォルダを削除します。
+
+## 安全性について
+
+- アプリは自分のPC（127.0.0.1）からのみ開けます。LAN やインターネットには公開しません。
+- 書いた Python コードは、画面とは別の隔離されたコンテナで実行されます（時間・メモリ・ファイル書き込みの制限あり、インターネットや DB には接続不可）。
+- SQL は読み取り専用の権限で実行され、教材データを変更できません。
+- 本人がローカルで使うことを前提にした設計です。**インターネットに公開して他人のコードを実行させる用途には使わないでください。**
+
+## 出典・ライセンス
+
+- 教材: 一般社団法人データサイエンティスト協会 スキル定義委員会「データサイエンス100本ノック（構造化データ加工編）」
+  https://github.com/The-Japan-DataScientist-Society/100knocks-preprocess （MIT License。ガイドPDFとロゴは CC BY-ND のため同梱していません）
+- 同梱した教材ファイルと取得元のcommitは [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) を参照してください。
+- 本アプリ自体のライセンスは公開時に決定します（MIT を予定）。
 
 ---
 
-## 開発者向け（Phase 0 進行中）
+## 開発者向け
 
-アプリ本体はまだありません。現時点で使えるコマンド（[uv](https://docs.astral.sh/uv/) が必要。Python 3.12 は uv が用意します）:
-
-```bash
-uv sync                               # 開発用依存（pytest, ruff）をインストール
-uv run pytest                         # テスト実行
-uv run ruff check . && uv run ruff format --check .   # lint / format チェック
-uv run python -m tools.extract_problems               # 同梱教材から問題カタログを再生成
-```
-
-Docker（Docker Desktop）を使う統合テスト:
+[uv](https://docs.astral.sh/uv/) と Docker Desktop を使います（Python 3.12 は uv が用意します）。
 
 ```bash
-docker compose --profile test run --rm --build tests   # DB・Pythonワーカーを起動して統合テスト
-docker compose --profile test down                     # 後片付け
+uv sync                                                # 依存をインストール
+uv run pytest                                          # 単体テスト（Docker不要）
+uv run ruff check . && uv run ruff format --check .    # lint / format
+docker compose --profile test run --rm --build tests   # 統合テスト（DB・ワーカー・UI）
+docker compose --profile test down
 docker build -f docker/worker/Dockerfile --target test -t knocks-worker:test .
 docker run --rm --init knocks-worker:test              # ワーカー単体テスト（fork隔離を含む）
+uv run python -m tools.extract_problems                # 同梱教材から問題カタログを再生成
 ```
 
-- 原教材のスナップショット: `upstream/`（出典・ライセンスは `THIRD_PARTY_NOTICES.md`）
-- 生成された問題カタログ: `exercises/catalog/`
+E2E確認（学習履歴を書き換えるため、E2E用のプロジェクト名で実行）:
+
+```bash
+docker compose -p ds100knocks-e2e up -d --build --wait
+docker compose -p ds100knocks-e2e exec -T app python - solve  < tests/e2e/ui_session.py
+docker compose -p ds100knocks-e2e down && docker compose -p ds100knocks-e2e up -d --wait
+docker compose -p ds100knocks-e2e exec -T app python - verify < tests/e2e/ui_session.py
+docker compose -p ds100knocks-e2e down -v
+```
+
+構成:
+
+| ディレクトリ | 内容 |
+| --- | --- |
+| `app/` | Streamlit UI |
+| `core/` | 問題カタログ・実行クライアント・採点・学習履歴（UI非依存） |
+| `worker/` | 学習者の Python を隔離実行するワーカー |
+| `docker/` | 各コンテナの Dockerfile、教材DBの初期化SQL |
+| `exercises/` | 問題カタログ（生成物）と採点定義（`problems/*.toml`） |
+| `upstream/` | 原教材のスナップショット（無改変） |
+| `tools/` | 教材の同梱・問題抽出ツール |
+| `docs/` | 要件・設計・計画・決定事項・セッションログ |

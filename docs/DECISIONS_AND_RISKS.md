@@ -74,6 +74,9 @@
 - **採点の実行場所**: ワーカーは「実行して結果を返す」だけ。比較はアプリ側（`core.grading.compare`）。参照結果は採点時に模範解答（subset_n/top_n では件数制限なし版）を同じランナーで実行して得てアプリ側でキャッシュ。巨大な期待値ファイルは置かず、回帰検出用に行数・ハッシュ等の指紋を `exercises/reference/` に保存する（0-A⑦）。
 - **結果のindex**: 名前なしindexは捨て、名前付き/MultiIndex（groupbyキー等）は列に戻す。MultiIndex列は `_` で連結。
 - **学習履歴（SQLite）**: `core/progress/repository.py`。状態は not_started / in_progress / passed、一度 passed になれば後の不正解で戻さない（直近結果は `last_grade_status`）。復習フラグは別属性。WALモード、操作ごとに接続・1トランザクション、`PRAGMA user_version` でマイグレーション。保存先はDockerの**名前付きvolume**（Windowsフォルダのbind mountはWALが不安定になりうるため使わない）。
+- **UI（Phase 1）**: `app/main.py`（Streamlit 1.66.0）。画面に依存しない操作は `core/service.py`。エディタは `st.text_area`（保存は入力確定時・実行/採点時）。Streamlit の利用統計送信は無効（`.streamlit/config.toml`）。ローカル開発時の待受は 127.0.0.1、コンテナ内は 0.0.0.0 でホスト公開は compose で 127.0.0.1 のみ。
+- **appコンテナのネットワーク**: ポート公開には internal でないネットワークが必要なため `frontnet` に接続（app のみ外向き通信が可能。学習者コードは app では実行しない）。
+- **学習履歴volume**: 固定名をやめ `<プロジェクト名>_progress`（既定 `ds100knocks_progress`）。E2E確認は別プロジェクト名で行い、普段の学習履歴を汚さない。
 - **pyarrow**: 当面入れない（pandas 3 の文字列型はPython実装で動作）。性能問題が出たら再検討。
 - **自作部分のライセンス**: MITを第一候補（Phase 4で最終確認）。名称は仮称のまま（リポジトリ名 `DS100KnocksMate` / 文書上の「100 Knocks Trainer」の統一はPhase 4）。
 

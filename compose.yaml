@@ -1,6 +1,6 @@
 # 100本ノック学習アプリ（ローカル専用）
 #
-#   起動:    docker compose up -d --build        → http://127.0.0.1:8501 （UIはPhase 1で追加）
+#   起動:    docker compose up -d --build        → http://127.0.0.1:8501
 #   停止:    docker compose down                 （学習履歴は残る）
 #   注意:    docker compose down -v は学習履歴（volume）も削除する
 #   テスト:  docker compose --profile test run --rm --build tests
@@ -10,6 +10,33 @@
 name: ds100knocks
 
 services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+      target: base
+    ports:
+      - "127.0.0.1:8501:8501"   # 自分のPCからのみアクセス可（LAN・インターネットには公開しない）
+    environment:
+      KNOCKS_WORKER_URL: "http://worker:8000"
+      KNOCKS_DB_DSN: "host=db dbname=dsdojo_db user=knocks_learner password=knocks-learner-readonly"
+    volumes:
+      - progress:/var/lib/knocks   # 学習履歴。down でも消えない（down -v で削除）
+    depends_on:
+      db:
+        condition: service_healthy
+      worker:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 1g
+    networks: [frontnet, dbnet, workernet]
+    restart: unless-stopped
+
   db:
     build:
       context: .
@@ -55,7 +82,13 @@ services:
         condition: service_healthy
     networks: [dbnet, workernet]
 
+volumes:
+  # 学習履歴。volume名は「<プロジェクト名>_progress」（既定: ds100knocks_progress）
+  progress: {}
+
 networks:
+  # ポート公開用（internal ネットワークだけではホストへポートを公開できないため）
+  frontnet: {}
   # internal: 外部（インターネット）へ出られない
   dbnet:
     internal: true

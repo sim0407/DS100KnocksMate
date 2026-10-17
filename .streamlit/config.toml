@@ -1,0 +1,15 @@
+# Streamlit 設定（学習中に外部へ情報を送らない・ローカル専用）
+[browser]
+gatherUsageStats = false
+
+[server]
+headless = true
+# ローカル開発時は自分のPCからのみ。Docker では起動引数で 0.0.0.0 にし、
+# ホスト側は compose で 127.0.0.1 にのみ公開する。
+address = "127.0.0.1"
+port = 8501
+fileWatcherType = "none"
+runOnSave = false
+
+[client]
+toolbarMode = "minimal"

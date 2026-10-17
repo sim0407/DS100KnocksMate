@@ -56,16 +56,16 @@ Docker未導入のため、Docker不要の 0-A を先行し、Docker Desktop導�
 
 ### タスク
 
-- [ ] Streamlitの問題選択UI、言語切替、コードエディタを実装。
-- [ ] Code Editorは導入前にメンテナンス状況と入力保持を確認。初期は `st.text_area` でもよい。
-- [ ] Python runnerの分離APIと出力JSON正規化を実装。
-- [ ] SQL runnerをread-only Postgresで実装。
-- [ ] 1問の検証器を作り、`実行` と `採点` を分離。
-- [ ] 採点結果に `passed` / `failed` / `manual_review` / `error` を設ける。
-- [ ] SQLiteに草稿・解答履歴・正解状態を保存。再起動後の復元を確認。
-- [ ] Docker Composeを用意し、UIのみlocalhostに公開。
-- [ ] READMEにWindowsを含む起動手順、停止手順、履歴保存場所を記載。
-- [ ] 最小限のintegration testと手動スモークテストを実施。
+- [x] Streamlitの問題選択UI、言語切替、コードエディタを実装。（`app/main.py`）
+- [x] Code Editorは導入前にメンテナンス状況と入力保持を確認。初期は `st.text_area` でもよい。（Phase 1 は `st.text_area`。専用エディタは後で評価）
+- [x] Python runnerの分離APIと出力JSON正規化を実装。
+- [x] SQL runnerをread-only Postgresで実装。
+- [x] 1問の検証器を作り、`実行` と `採点` を分離。（001〜005）
+- [x] 採点結果に `passed` / `failed` / `manual_review` / `error` を設ける。
+- [x] SQLiteに草稿・解答履歴・正解状態を保存。再起動後の復元を確認。（AppTest と compose down/up のE2Eで確認）
+- [x] Docker Composeを用意し、UIのみlocalhostに公開。（`127.0.0.1:8501` のみ）
+- [x] READMEにWindowsを含む起動手順、停止手順、履歴保存場所を記載。
+- [x] 最小限のintegration testと手動スモークテストを実施。（統合テスト105件、E2Eスクリプト。ブラウザでの目視確認はユーザー待ち）
 
 ### Done条件
 

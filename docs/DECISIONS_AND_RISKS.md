@@ -66,7 +66,10 @@
 - **Python実行環境の境界**: ワーカーはCSVから `df_*` を読み込み、Postgres接続情報・ネットワークを持たない。
 - **Postgres版**: 16系（上流は15.1）。差異が出たら記録。
 - **エディタ**: Phase 1は `st.text_area`。保存は 実行/採点/言語・問題切替時、および入力確定（blur）時。ブラウザを閉じる直前の未確定入力は失われうる点をREADMEに明記。
-- **Pythonワーカーの実行方式（案）**: sklearn等のimportに数秒、CSV読込に約0.5秒・約95MBかかるため、ライブラリとデータを読み込み済みの常駐親プロセスから実行ごとに `fork` した子プロセスでユーザーコードを実行する（毎回クリーンな状態・低遅延）。`fork` はLinuxコンテナ前提で、Windows上の単体テストは spawn による低速な代替経路で行う。0-A⑥で検証。
+- **Pythonワーカーの実行方式（確定・0-A⑥で検証済み）**: ライブラリと教材データを読み込み済みの常駐親プロセスから、実行ごとに `fork` した子プロセスでコードを実行（`worker/sandbox.py`）。子は setsid・実時間タイムアウトでプロセスグループごとSIGKILL・RLIMIT_CPU/FSIZE・新規一時ディレクトリ・`oom_score_adj=1000`・fd 0/1/2 を /dev/null。Linux専用で、fork系テストはWindowsではskipしコンテナ内で実行。
+- **ワーカーのプロトコル**: 標準ライブラリの **シングルスレッド** `HTTPServer`（`worker/server.py`、POST /execute, GET /health）。マルチスレッドからのforkはデッドロックしうるため。ヘルスチェックはTCP接続の受付で判定。コンテナは `init: true`（ゾンビ回収）。学習者コードはログに出さない。
+- **採点の実行場所**: ワーカーは「実行して結果を返す」だけ。比較はアプリ側（`core.grading.compare`）。参照結果は採点時に模範解答（subset_n/top_n では件数制限なし版）を同じランナーで実行して得てアプリ側でキャッシュ。巨大な期待値ファイルは置かず、回帰検出用に行数・ハッシュ等の指紋を `exercises/reference/` に保存する（0-A⑦）。
+- **結果のindex**: 名前なしindexは捨て、名前付き/MultiIndex（groupbyキー等）は列に戻す。MultiIndex列は `_` で連結。
 - **pyarrow**: 当面入れない（pandas 3 の文字列型はPython実装で動作）。性能問題が出たら再検討。
 - **自作部分のライセンス**: MITを第一候補（Phase 4で最終確認）。名称は仮称のまま（リポジトリ名 `DS100KnocksMate` / 文書上の「100 Knocks Trainer」の統一はPhase 4）。
 

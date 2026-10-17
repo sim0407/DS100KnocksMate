@@ -1,0 +1,14 @@
+.git
+.venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.ruff_cache
+var
+.env
+.env.*
+*.sqlite
+*.sqlite3
+*.db
+docs
+START_PROMPT.md

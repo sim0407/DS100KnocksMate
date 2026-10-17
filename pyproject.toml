@@ -1,7 +1,9 @@
 [project]
-name = "ds100knocks-trainer"
+name = "ds100knocksmate"
 version = "0.0.1"
-description = "データサイエンス100本ノック（構造化データ加工編）をローカルで解いて採点・進捗保存する学習アプリ（非公式）"
+description = "DS100KnocksMate: データサイエンス100本ノック（構造化データ加工編）をローカルで解いて採点・進捗保存する学習アプリ（非公式）"
+license = "MIT"
+license-files = ["LICENSE"]
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = []

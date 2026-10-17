@@ -3,7 +3,8 @@
 *.sqlite
 *.sqlite3
 *.db
-progress/
+# 注意: 先頭の / を外すと core/progress/（ソースコード）まで除外されてしまう
+/progress/
 
 # --- 秘密情報 ---
 .env

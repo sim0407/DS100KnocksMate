@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-unit:
+    name: lint・単体テスト
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: 依存のインストール（uv.lock どおり）
+        run: uv sync --locked
+      - name: lint
+        run: uv run ruff check .
+      - name: format
+        run: uv run ruff format --check .
+      - name: 単体テスト（Linux では fork による隔離のテストも実行される）
+        run: uv run pytest
+
+  worker:
+    name: ワーカーのコンテナ内テスト
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: テスト用イメージのビルド
+        run: docker build -f docker/worker/Dockerfile --target test -t knocks-worker:test .
+      - name: テスト（制限付き・ネットワークなし）
+        run: docker run --rm --init --memory=1g --pids-limit=128 --network=none knocks-worker:test
+
+  integration:
+    name: 統合テスト（DB・ワーカー・UI）
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: 統合テスト
+        run: docker compose --profile test run --rm --build tests
+      - name: 後片付け
+        if: always()
+        run: docker compose --profile test down -v
+
+  e2e:
+    name: 実ブラウザでのテスト
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: アプリの起動（E2E 用のプロジェクト名・ポート）
+        run: KNOCKS_PORT=8502 docker compose -p ds100knocks-e2e up -d --build --wait
+      - name: Playwright（Chromium）の準備
+        run: |
+          uv sync --locked --group e2e
+          uv run --group e2e playwright install --with-deps chromium
+      - name: テスト
+        run: KNOCKS_E2E_URL=http://127.0.0.1:8502 uv run --group e2e pytest tests/e2e -m e2e
+      - name: 失敗時のログ
+        if: failure()
+        run: docker compose -p ds100knocks-e2e logs --tail 200
+      - name: 後片付け
+        if: always()
+        run: docker compose -p ds100knocks-e2e down -v

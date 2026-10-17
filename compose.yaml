@@ -43,6 +43,10 @@ services:
       context: .
       dockerfile: docker/db/Dockerfile
     networks: [dbnet]
+    # 初期化済みデータをイメージに含め、非root（postgres ユーザー）で起動するため特権は不要
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
     mem_limit: 1g
     pids_limit: 256
     restart: unless-stopped

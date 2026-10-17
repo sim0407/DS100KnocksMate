@@ -5,6 +5,9 @@
 *.sql  text eol=lf
 *.py   text eol=lf
 Dockerfile text eol=lf
+# 起動用ファイル: Windows のバッチは CRLF、macOS の .command は LF
+*.bat  text eol=crlf
+*.command text eol=lf
 
 # 上流教材のスナップショットはバイト単位で保持（sha256で検証するため変換しない）
 upstream/** -text

@@ -41,7 +41,7 @@ Docker未導入のため、Docker不要の 0-A を先行し、Docker Desktop導�
 5. ✅ 比較器（TDD, `core/grading/compare.py`）：`dataframe_exact`（順序なし多重集合／順序あり）、N件ルール（部分集合判定）、index無視、型カテゴリ、NaN/NULL、float誤差。CLAUDE.mdの具体的テストケースを網羅。
 6. ✅ Python実行ワーカーの中核（Docker外でも単体テスト可能な部分）：最後の式の値の取得、stdout捕捉、例外整形、結果のJSON正規化（行数・サイズ上限、pickle不使用）、子プロセス＋タイムアウト。
 7. ✅ P-001〜005 のPython模範解答をワーカー経由で実行し参照結果を生成、別解・誤答で比較器が正しく判定することをテスト。（採点定義 `exercises/problems/00[1-5].toml`、`core/grading/grader.py`、統合テスト `tests/integration/test_grading_cases.py`。参照結果は上流Notebookの保存出力と照合済み）
-8. SQLite進捗リポジトリ（TDD）：`exercise_status` / `attempts`、マイグレーション、再オープン後の復元。
+8. ✅ SQLite進捗リポジトリ（TDD, `core/progress/repository.py`）：`exercise_status` / `attempts`、マイグレーション、再オープン後の復元。
 
 **0-B（Docker Desktop導入後）**
 

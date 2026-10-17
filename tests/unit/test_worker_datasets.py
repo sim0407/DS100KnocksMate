@@ -51,6 +51,10 @@ def test_code_columns_are_strings_with_zero_padding_kept(tables):
     assert tables["df_store"]["tel_no"].str.startswith("0").all()
     assert tables["df_geocode"]["postal_cd"].str.fullmatch(r"\d{3}-\d{4}").all()
     assert set(tables["df_customer"]["gender_cd"].unique()) == {"0", "1", "9"}
+    # 問題文どおり application_date は YYYYMMDD 形式の文字列（上流CSV分岐との意図的な差分）
+    application_date = tables["df_customer"]["application_date"]
+    assert pd.api.types.is_string_dtype(application_date)
+    assert application_date.str.fullmatch(r"\d{8}").all()
 
 
 def test_numeric_columns(tables):

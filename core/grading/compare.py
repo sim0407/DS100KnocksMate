@@ -10,6 +10,7 @@
 - top_n:     「上位N件」。subset_n に加えて sort_keys の順に並び、キー列の値の並びが上位N件と一致
              （境界の同順位はどの行でもよい）
 
+日時は表記をそろえて比較する（深夜0時の日時は日付とみなす: 2019-01-01 == 2019-01-01T00:00:00）。
 数値は integer/float を区別せず、小数第 `float_decimals` 位に丸めて比較する。
 丸め境界をまたぐごく僅かな差は不一致になりうる（既知の限界）。
 不一致の理由には期待値（模範解答の値）を含めない。学習者自身の行は例示してよい。
@@ -17,6 +18,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
@@ -94,6 +96,33 @@ def _canon(value: Any, decimals: int) -> tuple:
     return ("o", repr(value))
 
 
+def _canon_datetime(value: Any) -> Any:
+    """ISO形式の日時文字列を比較用にそろえる（タイムゾーン付きはUTCへ、深夜0時は日付へ）。"""
+    if not isinstance(value, str):
+        return value
+    try:
+        parsed = dt.datetime.fromisoformat(value)
+    except ValueError:
+        return value
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(dt.UTC).replace(tzinfo=None)
+    if parsed.time() == dt.time(0):
+        return parsed.date().isoformat()
+    return parsed.isoformat()
+
+
+def _normalize_datetime_columns(rows: list[list[Any]], indexes: list[int]) -> list[list[Any]]:
+    if not indexes:
+        return rows
+    result = []
+    for row in rows:
+        row = list(row)
+        for i in indexes:
+            row[i] = _canon_datetime(row[i])
+        result.append(row)
+    return result
+
+
 def _canon_row(row: Sequence[Any], decimals: int) -> tuple:
     return tuple(_canon(v, decimals) for v in row)
 
@@ -135,7 +164,13 @@ def compare_scalars(
                 f" / 実際: {_KIND_GROUP.get(actual.kind, actual.kind)}）"
             ],
         )
-    if _canon(expected.value, float_decimals) != _canon(actual.value, float_decimals):
+    expected_value, actual_value = expected.value, actual.value
+    if DATETIME in (expected.kind, actual.kind):
+        expected_value, actual_value = (
+            _canon_datetime(expected_value),
+            _canon_datetime(actual_value),
+        )
+    if _canon(expected_value, float_decimals) != _canon(actual_value, float_decimals):
         return Comparison(False, [f"値が一致しません（実際: {_fmt_value(actual.value)}）"])
     return Comparison(True)
 
@@ -184,6 +219,17 @@ def compare_tables(
     ]
     if reasons:
         return Comparison(False, reasons)
+
+    datetime_columns = [
+        i
+        for i, (ek, ak) in enumerate(zip(expected.kinds, actual_kinds, strict=True))
+        if DATETIME in (ek, ak)
+    ]
+    if datetime_columns:
+        expected = replace(
+            expected, rows=_normalize_datetime_columns(expected.rows, datetime_columns)
+        )
+        actual_rows = _normalize_datetime_columns(actual_rows, datetime_columns)
 
     checker = _ROW_CHECKERS[spec.rows]
     reasons = checker(expected, actual_rows, spec)

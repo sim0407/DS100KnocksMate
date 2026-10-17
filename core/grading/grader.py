@@ -7,12 +7,13 @@
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Literal
 
 from core.execution.results import ScalarResult, TableResult
-from core.exercises.catalog import Exercise
+from core.exercises.catalog import Exercise, GradingSpec
 from core.grading.compare import compare_scalars, compare_tables
 
 GRADE_MAX_ROWS = 300_000
@@ -38,18 +39,29 @@ class GradeResult:
 
 
 class ReferenceCache:
-    """参照結果のキャッシュ（言語・問題・参照コードごと）。アプリのプロセス内で共有する。"""
+    """参照結果のキャッシュ（言語・問題・参照コードごと）。アプリのプロセス内で共有する。
 
-    def __init__(self) -> None:
-        self._data: dict[tuple[str, str, str], dict] = {}
+    参照結果は10万行規模になることがあるため、件数に上限を設け、古いものから捨てる（LRU）。
+    """
+
+    def __init__(self, max_entries: int = 4) -> None:
+        self.max_entries = max_entries
+        self._data: OrderedDict[tuple[str, str, str], dict] = OrderedDict()
+
+    def __len__(self) -> int:
+        return len(self._data)
 
     def get_or_run(self, key: tuple[str, str, str], run: Callable[[], dict | None]) -> dict | None:
-        if key not in self._data:
-            value = run()
-            if value is None:
-                return None
-            self._data[key] = value
-        return self._data[key]
+        if key in self._data:
+            self._data.move_to_end(key)
+            return self._data[key]
+        value = run()
+        if value is None:
+            return None
+        self._data[key] = value
+        while len(self._data) > self.max_entries:
+            self._data.popitem(last=False)
+        return value
 
 
 def describe_error(response: dict) -> str:
@@ -78,36 +90,8 @@ def _as_scalar(result: dict) -> dict:
     return result
 
 
-def grade(
-    exercise: Exercise, language: str, code: str, runner: Runner, cache: ReferenceCache
-) -> GradeResult:
-    spec = exercise.grading[language]
-    if spec.strategy == "manual_review":
-        return GradeResult("manual_review", [spec.reason])
-
-    learner = runner(code, GRADE_MAX_ROWS, GRADE_TIMEOUT_SEC)
-    if learner.get("status") != "ok":
-        return GradeResult("error", [describe_error(learner)])
-    result = learner.get("result")
-    if result is None:
-        return GradeResult("error", [NO_RESULT_MESSAGE])
-
-    def run_reference() -> dict | None:
-        response = runner(spec.reference or "", GRADE_MAX_ROWS, GRADE_TIMEOUT_SEC)
-        ref = response.get("result")
-        if response.get("status") != "ok" or ref is None or ref.get("truncated"):
-            return None
-        return ref
-
-    reference = cache.get_or_run((language, exercise.id, spec.reference or ""), run_reference)
-    if reference is None:
-        return GradeResult(
-            "manual_review",
-            [
-                "参照結果を生成できなかったため自動採点できません（アプリ側の問題の可能性があります）。"
-            ],
-        )
-
+def _evaluate(spec: GradingSpec, result: dict, reference: dict) -> GradeResult:
+    """学習者の結果を1つの参照結果と比較する。"""
     expected_type = "table" if spec.strategy == "table" else "scalar"
     if expected_type == "scalar":
         result, reference = _as_scalar(result), _as_scalar(reference)
@@ -135,3 +119,47 @@ def grade(
     if comparison.passed:
         return GradeResult("passed", ["正解です！"])
     return GradeResult("failed", comparison.reasons)
+
+
+def grade(
+    exercise: Exercise, language: str, code: str, runner: Runner, cache: ReferenceCache
+) -> GradeResult:
+    spec = exercise.grading[language]
+    if spec.strategy == "manual_review":
+        return GradeResult("manual_review", [spec.reason])
+
+    learner = runner(code, GRADE_MAX_ROWS, GRADE_TIMEOUT_SEC)
+    if learner.get("status") != "ok":
+        return GradeResult("error", [describe_error(learner)])
+    result = learner.get("result")
+    if result is None:
+        return GradeResult("error", [NO_RESULT_MESSAGE])
+
+    def reference_for(code_: str) -> dict | None:
+        def run() -> dict | None:
+            response = runner(code_, GRADE_MAX_ROWS, GRADE_TIMEOUT_SEC)
+            ref = response.get("result")
+            if response.get("status") != "ok" or ref is None or ref.get("truncated"):
+                return None
+            return ref
+
+        return cache.get_or_run((language, exercise.id, code_), run)
+
+    reference = reference_for(spec.reference or "")
+    if reference is None:
+        return GradeResult(
+            "manual_review",
+            [
+                "参照結果を生成できなかったため自動採点できません（アプリ側の問題の可能性があります）。"
+            ],
+        )
+    primary = _evaluate(spec, result, reference)
+    if primary.status != "failed":
+        return primary
+
+    # 許容する別の参照（ddof の違い・表記の違いなど）のどれかに一致すれば正解
+    for alternative in spec.alternatives:
+        alt_reference = reference_for(alternative)
+        if alt_reference is not None and _evaluate(spec, result, alt_reference).status == "passed":
+            return GradeResult("passed", ["正解です！"])
+    return primary

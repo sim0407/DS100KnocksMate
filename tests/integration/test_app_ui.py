@@ -150,12 +150,12 @@ def test_overview_page(progress_db):
 
 def test_auto_only_filter_limits_list_and_navigation(progress_db):
     at = start()
-    at.selectbox(key="exercise_id").set_value("010").run()
+    at.selectbox(key="exercise_id").set_value("038").run()
     at.checkbox(key="auto_only").check().run()
     options = at.selectbox(key="exercise_id").options
     assert all("採点未対応" not in o for o in options)
     at.button(key="next").click().run()
-    assert at.subheader[0].value == "P-017"  # 011〜016 は未対応のため飛ばす
+    assert at.subheader[0].value == "P-040"  # 039 は自動採点しないため飛ばす
 
 
 def test_default_editor_mode_renders_without_error(tmp_path, monkeypatch):

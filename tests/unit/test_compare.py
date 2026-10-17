@@ -354,3 +354,32 @@ def test_top_n_with_positional_columns_uses_expected_sort_key_names():
     universe = table(["store_cd", "avg"], [["S1", 3.5], ["S2", 2.5], ["S3", 1.0]])
     actual = table(["store_cd", "avg_amount"], [["S1", 3.5], ["S2", 2.5]])
     assert compare_tables(universe, actual, spec).passed
+
+
+# ---------------------------------------------------------------- 日付の正規化
+
+
+def test_midnight_datetime_equals_date():
+    """pandas の datetime64（深夜0時）と SQL の DATE や Python の date を同じ日付とみなす。"""
+    expected = table(["d"], [["2019-01-01T00:00:00"]], kinds=["datetime"])
+    for value in ("2019-01-01", "2019-01-01T00:00:00+00:00", "2019-01-01 00:00:00"):
+        actual = table(["d"], [[value]], kinds=["datetime"])
+        assert compare_tables(expected, actual).passed, value
+
+
+def test_datetime_with_time_is_not_date():
+    expected = table(["d"], [["2019-01-01T00:00:00"]], kinds=["datetime"])
+    actual = table(["d"], [["2019-01-01T09:00:00"]], kinds=["datetime"])
+    assert not compare_tables(expected, actual).passed
+
+
+def test_date_string_is_not_datetime_kind():
+    expected = table(["d"], [["2019-01-01T00:00:00"]], kinds=["datetime"])
+    actual = table(["d"], [["2019-01-01"]], kinds=["string"])
+    assert not compare_tables(expected, actual).passed
+
+
+def test_scalar_datetime_normalized():
+    assert compare_scalars(
+        ScalarResult("2020-02-03T00:00:00", "datetime"), ScalarResult("2020-02-03", "datetime")
+    ).passed

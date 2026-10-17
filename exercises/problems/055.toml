@@ -1,0 +1,59 @@
+# P-055 / S-055: 顧客ごとの売上金額合計を四分位で1〜4にカテゴリ化して10件
+id = "055"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。顧客ID・売上金額合計・カテゴリ値（1〜4）の順に出力してください。"
+reference = '''
+df_sales_amount = df_receipt[["customer_id", "amount"]].groupby("customer_id").sum().reset_index()
+pct25 = np.quantile(df_sales_amount["amount"], 0.25)
+pct50 = np.quantile(df_sales_amount["amount"], 0.5)
+pct75 = np.quantile(df_sales_amount["amount"], 0.75)
+
+
+def pct_group(x):
+    if x < pct25:
+        return 1
+    if x < pct50:
+        return 2
+    if x < pct75:
+        return 3
+    return 4
+
+
+df_sales_amount["pct_group"] = df_sales_amount["amount"].apply(pct_group)
+df_sales_amount
+'''
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。顧客ID・売上金額合計・カテゴリ値（1〜4）の順に出力してください。"
+reference = '''
+WITH sales_amount AS (
+    SELECT customer_id, SUM(amount) AS sum_amount FROM receipt GROUP BY customer_id
+),
+sales_pct AS (
+    SELECT
+        PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY sum_amount) AS pct25,
+        PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY sum_amount) AS pct50,
+        PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY sum_amount) AS pct75
+    FROM sales_amount
+)
+SELECT
+    a.customer_id,
+    a.sum_amount,
+    CASE
+        WHEN a.sum_amount < pct25 THEN 1
+        WHEN a.sum_amount < pct50 THEN 2
+        WHEN a.sum_amount < pct75 THEN 3
+        ELSE 4
+    END AS pct_group
+FROM sales_amount a CROSS JOIN sales_pct p
+'''

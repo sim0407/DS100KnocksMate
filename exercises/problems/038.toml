@@ -1,0 +1,35 @@
+# P-038 / S-038: 女性会員ごとの売上金額合計（売上なしは0）を10件
+id = "038"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。顧客ID・売上金額合計の順に出力してください。"
+reference = '''
+df_amount_sum = df_receipt.groupby("customer_id").amount.sum().reset_index()
+df_tmp = df_customer.query(
+    'gender_cd == "1" and not customer_id.str.startswith("Z")', engine="python"
+)
+pd.merge(df_tmp["customer_id"], df_amount_sum, how="left", on="customer_id").fillna(0)
+'''
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。顧客ID・売上金額合計の順に出力してください。"
+reference = '''
+WITH customer_amount AS (
+    SELECT customer_id, SUM(amount) AS sum_amount FROM receipt GROUP BY customer_id
+),
+customer_data AS (
+    SELECT customer_id FROM customer WHERE gender_cd = '1' AND customer_id NOT LIKE 'Z%'
+)
+SELECT c.customer_id, COALESCE(a.sum_amount, 0)
+FROM customer_data c
+LEFT OUTER JOIN customer_amount a ON c.customer_id = a.customer_id
+'''

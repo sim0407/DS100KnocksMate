@@ -1,0 +1,11 @@
+# P-040 / S-040: 店舗と商品の直積の件数（値）
+id = "040"
+status = "verified"
+
+[python]
+strategy = "scalar"
+reference = 'len(pd.merge(df_store, df_product, how="cross"))'
+
+[sql]
+strategy = "scalar"
+reference = 'SELECT COUNT(*) FROM store CROSS JOIN product'

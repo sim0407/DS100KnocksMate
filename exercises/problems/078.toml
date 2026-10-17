@@ -1,0 +1,48 @@
+# P-078 / S-078: IQRによる外れ値（会員の売上金額合計）を10件
+id = "078"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。顧客ID・売上金額合計の順に出力してください。"
+reference = '''
+df_sales_amount = (
+    df_receipt.query('not customer_id.str.startswith("Z")', engine="python")
+    .groupby("customer_id")
+    .agg({"amount": "sum"})
+    .reset_index()
+)
+
+pct25 = np.percentile(df_sales_amount["amount"], q=25)
+pct75 = np.percentile(df_sales_amount["amount"], q=75)
+iqr = pct75 - pct25
+df_sales_amount.query("amount < @pct25 - 1.5 * @iqr or @pct75 + 1.5 * @iqr < amount")
+'''
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。顧客ID・売上金額合計の順に出力してください。"
+reference = '''
+WITH sales_amount AS (
+    SELECT customer_id, SUM(amount) AS sum_amount
+    FROM receipt
+    WHERE customer_id NOT LIKE 'Z%'
+    GROUP BY customer_id
+)
+
+SELECT customer_id, sum_amount
+FROM sales_amount
+CROSS JOIN (
+    SELECT
+        PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY sum_amount) AS p25,
+        PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY sum_amount) AS p75
+    FROM sales_amount
+) s
+WHERE sum_amount < p25 - (p75 - p25) * 1.5 OR p75 + (p75 - p25) * 1.5 < sum_amount
+'''

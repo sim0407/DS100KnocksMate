@@ -1,0 +1,19 @@
+# P-011 / S-011: 顧客IDの末尾が1の顧客を10件（先頭N件ルール）
+id = "011"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+reference = '''
+df_customer.query("customer_id.str.endswith('1')", engine="python")
+'''
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+reference = '''
+SELECT * FROM customer WHERE customer_id LIKE '%1'
+'''

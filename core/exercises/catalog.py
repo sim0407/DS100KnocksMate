@@ -41,6 +41,7 @@ _SPEC_LANG_KEYS = {
     "reason",
     "column_names",
     "note",
+    "alternatives",
 }
 _ROW_MODES = ("unordered", "ordered", "sorted", "subset_n", "top_n")
 
@@ -55,6 +56,8 @@ class GradingSpec:
     float_decimals: int = 6
     reason: str = ""  # manual_review の理由（学習者に表示）
     note: str = ""  # 採点基準の補足（例: 列名は問いません）。学習者に表示
+    # 許容する別の参照（どれかに一致すれば正解）。不正解の理由は reference との比較から作る
+    alternatives: tuple[str, ...] = ()
 
 
 UNSUPPORTED = GradingSpec("manual_review", reason=UNSUPPORTED_REASON)
@@ -92,9 +95,19 @@ def _parse_language(lang: str, data: dict[str, Any]) -> GradingSpec:
     if not isinstance(reference, str) or not reference.strip():
         raise ValueError(f"[{lang}] reference（参照結果を作るコード）が必要")
     float_decimals = int(data.get("float_decimals", 6))
+    alternatives = data.get("alternatives", [])
+    if not isinstance(alternatives, list) or not all(
+        isinstance(a, str) and a.strip() for a in alternatives
+    ):
+        raise ValueError(f"[{lang}] alternatives はコード文字列のリストで指定する")
+    alternatives = tuple(a.strip() for a in alternatives)
     if strategy == "scalar":
         return GradingSpec(
-            "scalar", reference=reference.strip(), float_decimals=float_decimals, note=note
+            "scalar",
+            reference=reference.strip(),
+            float_decimals=float_decimals,
+            note=note,
+            alternatives=alternatives,
         )
 
     rows = data.get("rows", "unordered")
@@ -112,7 +125,12 @@ def _parse_language(lang: str, data: dict[str, Any]) -> GradingSpec:
         float_decimals=float_decimals,
     )
     return GradingSpec(
-        "table", reference=reference.strip(), table=table, float_decimals=float_decimals, note=note
+        "table",
+        reference=reference.strip(),
+        table=table,
+        float_decimals=float_decimals,
+        note=note,
+        alternatives=alternatives,
     )
 
 

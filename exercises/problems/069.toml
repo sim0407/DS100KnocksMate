@@ -1,0 +1,45 @@
+# P-069 / S-069: 顧客ごとの全商品と瓶詰缶詰（07）の売上金額合計と比率を10件
+id = "069"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。顧客ID・全商品の売上金額合計・07の売上金額合計・比率の順に出力してください。"
+reference = '''
+df_tmp_1 = df_receipt.groupby("customer_id").agg({"amount": "sum"}).reset_index().rename(
+    columns={"amount": "sum_all"}
+)
+df_tmp_2 = (
+    pd.merge(df_receipt, df_product.query('category_major_cd == "07"'), how="inner", on="product_cd")
+    .groupby("customer_id")
+    .agg({"amount": "sum"})
+    .reset_index()
+    .rename(columns={"amount": "sum_07"})
+)
+df_tmp_3 = pd.merge(df_tmp_1, df_tmp_2, how="inner", on="customer_id")
+df_tmp_3["sales_rate"] = df_tmp_3["sum_07"] / df_tmp_3["sum_all"]
+df_tmp_3
+'''
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。顧客ID・全商品の売上金額合計・07の売上金額合計・比率の順に出力してください。"
+reference = '''
+WITH amount_all AS (
+    SELECT customer_id, SUM(amount) AS sum_all FROM receipt GROUP BY customer_id
+),
+amount_07 AS (
+    SELECT r.customer_id, SUM(r.amount) AS sum_07
+    FROM receipt r JOIN product p ON r.product_cd = p.product_cd
+    WHERE p.category_major_cd = '07'
+    GROUP BY r.customer_id
+)
+SELECT a.customer_id, sum_all, sum_07, sum_07 * 1.0 / sum_all AS sales_rate
+FROM amount_all a JOIN amount_07 b ON a.customer_id = b.customer_id
+'''

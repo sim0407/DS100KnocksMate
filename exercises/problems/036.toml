@@ -1,0 +1,15 @@
+# P-036 / S-036: レシート明細と店舗を内部結合し、明細の全項目＋店舗名を10件
+id = "036"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+reference = 'pd.merge(df_receipt, df_store[["store_cd", "store_name"]], how="inner", on="store_cd")'
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+reference = 'SELECT r.*, s.store_name FROM receipt r JOIN store s ON r.store_cd = s.store_cd'

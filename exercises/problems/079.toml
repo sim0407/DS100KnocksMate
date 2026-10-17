@@ -1,0 +1,26 @@
+# P-079 / S-079: 商品データの各項目の欠損数
+id = "079"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "unordered"
+column_names = false
+note = "列名は問いません。項目名と欠損数の2列（例: df_product.isnull().sum() の結果）で出力してください。"
+reference = 'df_product.isnull().sum()'
+
+[sql]
+strategy = "table"
+rows = "unordered"
+column_names = false
+note = "列名は問いません。商品データの各項目の欠損数を、項目の順に1行で出力してください。"
+reference = '''
+SELECT
+    SUM(CASE WHEN product_cd IS NULL THEN 1 ELSE 0 END) AS product_cd,
+    SUM(CASE WHEN category_major_cd IS NULL THEN 1 ELSE 0 END) AS category_major_cd,
+    SUM(CASE WHEN category_medium_cd IS NULL THEN 1 ELSE 0 END) AS category_medium_cd,
+    SUM(CASE WHEN category_small_cd IS NULL THEN 1 ELSE 0 END) AS category_small_cd,
+    SUM(CASE WHEN unit_price IS NULL THEN 1 ELSE 0 END) AS unit_price,
+    SUM(CASE WHEN unit_cost IS NULL THEN 1 ELSE 0 END) AS unit_cost
+FROM product
+'''

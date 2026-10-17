@@ -1,0 +1,27 @@
+# P-031 / S-031: 店舗ごとの売上金額の標準偏差、降順5件（母集団・標本のどちらも許容）
+id = "031"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "top_n"
+n = 5
+sort_keys = [{ column = "amount", descending = true }]
+column_names = false
+note = "列名は問いません。店舗コード・標準偏差の順に出力してください。標準偏差は母集団（ddof=0）・標本（不偏, ddof=1）のどちらでも正解とします。"
+reference = 'df_receipt.groupby("store_cd").amount.std(ddof=0).reset_index()'
+alternatives = [
+    'df_receipt.groupby("store_cd").amount.std(ddof=1).reset_index()',
+]
+
+[sql]
+strategy = "table"
+rows = "top_n"
+n = 5
+sort_keys = [{ column = "stds_amount", descending = true }]
+column_names = false
+note = "列名は問いません。店舗コード・標準偏差の順に出力してください。標準偏差は母集団（ddof=0）・標本（不偏, ddof=1）のどちらでも正解とします。"
+reference = 'SELECT store_cd, STDDEV_POP(amount) AS stds_amount FROM receipt GROUP BY store_cd'
+alternatives = [
+    'SELECT store_cd, STDDEV_SAMP(amount) AS stds_amount FROM receipt GROUP BY store_cd',
+]

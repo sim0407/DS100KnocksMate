@@ -1,0 +1,26 @@
+# P-046 / S-046: 申し込み日（文字列）を日付型にして顧客IDとともに10件
+id = "046"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。顧客ID・申し込み日（日付型）の順に出力してください。"
+reference = '''
+pd.concat(
+    [df_customer["customer_id"], pd.to_datetime(df_customer["application_date"])],
+    axis=1,
+)
+'''
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。顧客ID・申し込み日（日付型）の順に出力してください。"
+reference = '''
+SELECT customer_id, TO_DATE(application_date, 'YYYYMMDD') AS application_date FROM customer
+'''

@@ -1,0 +1,19 @@
+# P-014 / S-014: ステータスコードが1〜9で終わる顧客を10件
+id = "014"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+reference = '''
+df_customer.query("status_cd.str.contains(r'[1-9]$')", engine="python")
+'''
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+reference = '''
+SELECT * FROM customer WHERE status_cd ~ '[1-9]$'
+'''

@@ -1,0 +1,19 @@
+# P-015 / S-015: A〜Fで始まり1〜9で終わる顧客を10件
+id = "015"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+reference = '''
+df_customer.query("status_cd.str.contains(r'^[A-F].*[1-9]$')", engine="python")
+'''
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+reference = '''
+SELECT * FROM customer WHERE status_cd ~ '^[A-F].*[1-9]$'
+'''

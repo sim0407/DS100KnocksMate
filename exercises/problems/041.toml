@@ -1,0 +1,38 @@
+# P-041 / S-041: 日付ごとの売上金額と前回売上日からの増減を10件
+id = "041"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。売上日・売上金額・前回の売上日・前回の売上金額・増減の5列をこの順に出力してください（最初の日は前回がないため空欄で構いません）。"
+reference = '''
+df_tmp = df_receipt[["sales_ymd", "amount"]].groupby("sales_ymd").sum().reset_index()
+df_tmp["lag_ymd"] = df_tmp["sales_ymd"].shift()
+df_tmp["lag_amount"] = df_tmp["amount"].shift()
+df_tmp["diff_amount"] = df_tmp["amount"] - df_tmp["lag_amount"]
+df_tmp
+'''
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。売上日・売上金額・前回の売上日・前回の売上金額・増減の5列をこの順に出力してください（最初の日は前回がないため空欄で構いません）。"
+reference = '''
+WITH sales_amount_by_date AS (
+    SELECT sales_ymd, SUM(amount) AS amount FROM receipt GROUP BY sales_ymd
+),
+with_lag AS (
+    SELECT
+        sales_ymd,
+        amount,
+        LAG(sales_ymd, 1) OVER (ORDER BY sales_ymd) AS lag_ymd,
+        LAG(amount, 1) OVER (ORDER BY sales_ymd) AS lag_amount
+    FROM sales_amount_by_date
+)
+SELECT sales_ymd, amount, lag_ymd, lag_amount, amount - lag_amount AS diff_amount FROM with_lag
+'''

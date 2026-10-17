@@ -1,0 +1,21 @@
+# P-028 / S-028: 店舗ごとの売上金額の中央値、降順TOP5（上位N件）
+id = "028"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "top_n"
+n = 5
+sort_keys = [{ column = "amount", descending = true }]
+column_names = false
+note = "列名は問いません。店舗コード・中央値の順に出力してください。"
+reference = 'df_receipt.groupby("store_cd").agg({"amount": "median"}).reset_index()'
+
+[sql]
+strategy = "table"
+rows = "top_n"
+n = 5
+sort_keys = [{ column = "amount_50per", descending = true }]
+column_names = false
+note = "列名は問いません。店舗コード・中央値の順に出力してください。"
+reference = 'SELECT store_cd, PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY amount) AS amount_50per FROM receipt GROUP BY store_cd'

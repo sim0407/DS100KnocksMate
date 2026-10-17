@@ -1,0 +1,66 @@
+# P-059 / S-059: 会員の売上金額合計を標準化して10件（母集団/標本の標準偏差どちらも許容）
+id = "059"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。顧客ID・売上金額合計・標準化した値の順に出力してください。標準偏差は母集団・標本（不偏）のどちらでも正解とします。"
+reference = '''
+df_sales_amount = (
+    df_receipt.query('not customer_id.str.startswith("Z")', engine="python")
+    .groupby("customer_id")
+    .agg({"amount": "sum"})
+    .reset_index()
+)
+df_sales_amount["std_amount"] = preprocessing.scale(df_sales_amount["amount"])
+df_sales_amount
+'''
+alternatives = [
+    '''
+df_sales_amount = (
+    df_receipt.query('not customer_id.str.startswith("Z")', engine="python")
+    .groupby("customer_id")
+    .agg({"amount": "sum"})
+    .reset_index()
+)
+a = df_sales_amount["amount"]
+df_sales_amount["std_amount"] = (a - a.mean()) / a.std(ddof=1)
+df_sales_amount
+''',
+]
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。顧客ID・売上金額合計・標準化した値の順に出力してください。標準偏差は母集団・標本（不偏）のどちらでも正解とします。"
+reference = '''
+WITH sales_amount AS (
+    SELECT customer_id, SUM(amount) AS sum_amount
+    FROM receipt
+    WHERE customer_id NOT LIKE 'Z%'
+    GROUP BY customer_id
+)
+SELECT customer_id, sum_amount,
+    (sum_amount - (SELECT AVG(sum_amount) FROM sales_amount))
+        / (SELECT STDDEV_POP(sum_amount) FROM sales_amount) AS std_amount
+FROM sales_amount
+'''
+alternatives = [
+    '''
+WITH sales_amount AS (
+    SELECT customer_id, SUM(amount) AS sum_amount
+    FROM receipt
+    WHERE customer_id NOT LIKE 'Z%'
+    GROUP BY customer_id
+)
+SELECT customer_id, sum_amount,
+    (sum_amount - (SELECT AVG(sum_amount) FROM sales_amount))
+        / (SELECT STDDEV_SAMP(sum_amount) FROM sales_amount) AS std_amount
+FROM sales_amount
+''',
+]

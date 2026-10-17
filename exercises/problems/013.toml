@@ -1,0 +1,19 @@
+# P-013 / S-013: ステータスコードがA〜Fで始まる顧客を10件
+id = "013"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+reference = '''
+df_customer.query("status_cd.str.contains(r'^[A-F]')", engine="python")
+'''
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+reference = '''
+SELECT * FROM customer WHERE status_cd ~ '^[A-F]'
+'''

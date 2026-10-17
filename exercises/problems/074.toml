@@ -1,0 +1,34 @@
+# P-074 / S-074: 売上日の週の月曜日からの経過日数と直前の月曜日を10件
+id = "074"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。売上日（日付型）・経過日数・直前の月曜日（日付型）の順に出力してください。"
+reference = '''
+df_tmp = df_receipt[["sales_ymd"]].copy()
+df_tmp["sales_ymd"] = pd.to_datetime(df_tmp["sales_ymd"].astype("str"))
+df_tmp["elapsed_days"] = df_tmp["sales_ymd"].dt.weekday
+df_tmp["monday"] = df_tmp["sales_ymd"] - pd.to_timedelta(df_tmp["elapsed_days"], unit="D")
+df_tmp
+'''
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。売上日（日付型）・経過日数・直前の月曜日（日付型）の順に出力してください。"
+reference = '''
+WITH elapsed_days_tbl AS (
+    SELECT
+        TO_DATE(CAST(sales_ymd AS VARCHAR), 'YYYYMMDD') AS sales_ymd,
+        EXTRACT(DOW FROM (TO_DATE(CAST(sales_ymd AS VARCHAR), 'YYYYMMDD') - 1)) AS elapsed_days
+    FROM receipt
+)
+SELECT sales_ymd, elapsed_days, sales_ymd - CAST(elapsed_days AS INTEGER) AS monday
+FROM elapsed_days_tbl
+'''

@@ -1,0 +1,17 @@
+# P-016 / S-016: 電話番号が3桁-3桁-4桁の店舗を全件（順序なし）
+id = "016"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "unordered"
+reference = '''
+df_store.query("tel_no.str.contains(r'^[0-9]{3}-[0-9]{3}-[0-9]{4}$')", engine="python")
+'''
+
+[sql]
+strategy = "table"
+rows = "unordered"
+reference = '''
+SELECT * FROM store WHERE tel_no ~ '^[0-9]{3}-[0-9]{3}-[0-9]{4}$'
+'''

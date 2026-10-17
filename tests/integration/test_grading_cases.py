@@ -175,6 +175,99 @@ CASES = [
         "WHERE customer_id = 'CS018205000001' AND amount <= 1000",
         "failed",
     ),
+    # ---- Phase 2 拡大: 別の参照（alternatives）で許容するもの
+    (
+        "030",
+        "python",
+        'df_receipt.groupby("store_cd").amount.var().sort_values(ascending=False).head(5)',
+        "passed",
+    ),
+    (
+        "030",
+        "python",
+        'df_receipt.groupby("store_cd").amount.std().sort_values(ascending=False).head(5)',
+        "failed",
+    ),
+    (
+        "030",
+        "sql",
+        "SELECT store_cd, VARIANCE(amount) FROM receipt GROUP BY store_cd ORDER BY 2 DESC LIMIT 5",
+        "passed",
+    ),
+    (
+        "031",
+        "sql",
+        "SELECT store_cd, STDDEV(amount) FROM receipt GROUP BY store_cd ORDER BY 2 DESC LIMIT 5",
+        "passed",
+    ),
+    (
+        "054",
+        "python",
+        'df = df_customer[["customer_id", "address"]].copy()\n'
+        'df["cd"] = df["address"].str[:3].map({"埼玉県": 11, "千葉県": 12, "東京都": 13, "神奈川": 14})\n'
+        "df.head(10)",
+        "passed",  # 数値のコードも許容
+    ),
+    (
+        "054",
+        "python",
+        'df = df_customer[["customer_id", "address"]].copy()\n'
+        'df["cd"] = df["address"].str[:3].map({"埼玉県": 12, "千葉県": 11, "東京都": 13, "神奈川": 14})\n'
+        "df.head(10)",
+        "failed",
+    ),
+    (
+        "061",
+        "python",
+        'df = df_receipt[~df_receipt.customer_id.str.startswith("Z")].groupby("customer_id", as_index=False).amount.sum()\n'
+        'df["log"] = np.log10(df["amount"])\n'
+        "df.head(10)",
+        "passed",  # +0.5 なし
+    ),
+    (
+        "061",
+        "python",
+        'df = df_receipt[~df_receipt.customer_id.str.startswith("Z")].groupby("customer_id", as_index=False).amount.sum()\n'
+        'df["log"] = np.log(df["amount"])\n'
+        "df.head(10)",
+        "failed",  # 底が違う
+    ),
+    ("063", "sql", "SELECT *, unit_price - unit_cost FROM product LIMIT 10", "passed"),
+    ("063", "sql", "SELECT product_cd, unit_price - unit_cost FROM product LIMIT 10", "failed"),
+    # ---- 日付型（深夜0時の日時と日付を同じとみなす）
+    (
+        "046",
+        "python",
+        'df = df_customer[["customer_id"]].copy()\n'
+        'df["d"] = pd.to_datetime(df_customer["application_date"]).dt.date\n'
+        "df.head(10)",
+        "passed",
+    ),
+    (
+        "046",
+        "python",
+        'df_customer[["customer_id", "application_date"]].head(10)',
+        "failed",  # 文字列のまま
+    ),
+    (
+        "046",
+        "sql",
+        "SELECT customer_id, CAST(application_date AS DATE) FROM customer LIMIT 10",
+        "passed",
+    ),
+    ("046", "sql", "SELECT customer_id, application_date FROM customer LIMIT 10", "failed"),
+    (
+        "048",
+        "sql",
+        "SELECT receipt_no, receipt_sub_no, TO_TIMESTAMP(sales_epoch) FROM receipt LIMIT 10",
+        "passed",
+    ),
+    # ---- 値・Series
+    ("040", "python", "len(df_store) * len(df_product)", "passed"),
+    ("064", "sql", "SELECT AVG(1 - unit_cost * 1.0 / unit_price) FROM product", "passed"),
+    ("079", "python", "df_product.isna().sum()", "passed"),
+    ("079", "python", "df_product.isna().sum().sort_values()", "passed"),
+    ("079", "python", "df_product.notna().sum()", "failed"),
     # ---- 006 OR を含む複合条件
     (
         "006",
@@ -398,10 +491,22 @@ AUTO_GRADED = [
     for lang in ("python", "sql")
     if e.grading[lang].strategy != "manual_review"
 ]
+# 上流の解答セルのうち、単独では完全な解答にならないもの（理由つきで対象外）
+NOT_STANDALONE_ANSWERS = {
+    ("055", "python", 1): "確認用コード（前のセルの変数を表示するだけ）",
+    ("055", "python", 2): "コード例2（前のセルで作った変数を使う）",
+    ("055", "python", 3): "参考コード（上流Notebookが「題意を満たさない」と明記）",
+    (
+        "069",
+        "python",
+        1,
+    ): "参考コード（全カテゴリの列を含む横持ち。画面の採点基準で4列構成を求めている）",
+}
 MODEL_ANSWERS = [
     (eid, lang, i, code)
     for eid, lang in AUTO_GRADED
     for i, code in enumerate(load_answers()[eid][lang])
+    if (eid, lang, i) not in NOT_STANDALONE_ANSWERS
 ]
 
 

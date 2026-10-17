@@ -1,0 +1,11 @@
+# P-058 / S-058: 性別コードのダミー変数化
+id = "058"
+status = "verified"
+
+[python]
+strategy = "manual_review"
+reason = "ダミー変数の列名・値の形式（True/False、0/1）・基準カテゴリを除くかどうかで複数の正解があり得るため、自動採点できません。実行結果を見て確認してください。"
+
+[sql]
+strategy = "manual_review"
+reason = "ダミー変数の列名・値の形式（True/False、0/1）・基準カテゴリを除くかどうかで複数の正解があり得るため、自動採点できません。実行結果を見て確認してください。"

@@ -1,0 +1,33 @@
+# P-063 / S-063: 各商品の利益額を算出して10件（列構成は2通りを許容）
+id = "063"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。「商品コード・単価・原価・利益額」の4列、または「商品データの全項目・利益額」のどちらの構成でも正解とします。"
+reference = '''
+df_tmp = df_product.copy()
+df_tmp["unit_profit"] = df_tmp["unit_price"] - df_tmp["unit_cost"]
+df_tmp
+'''
+alternatives = [
+    '''
+df_tmp = df_product[["product_cd", "unit_price", "unit_cost"]].copy()
+df_tmp["unit_profit"] = df_tmp["unit_price"] - df_tmp["unit_cost"]
+df_tmp
+''',
+]
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。「商品コード・単価・原価・利益額」の4列、または「商品データの全項目・利益額」のどちらの構成でも正解とします。"
+reference = 'SELECT product_cd, unit_price, unit_cost, unit_price - unit_cost AS unit_profit FROM product'
+alternatives = [
+    'SELECT *, unit_price - unit_cost AS unit_profit FROM product',
+]

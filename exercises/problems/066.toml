@@ -1,0 +1,45 @@
+# P-066 / S-066: 利益率30%の新単価（1円未満を丸め。四捨五入・偶数丸めを許容）を10件
+id = "066"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。商品コード・単価・原価・新しい単価・新しい利益率の5列をこの順に出力してください。丸めは四捨五入・偶数への丸めのどちらでも正解とします。"
+reference = '''
+df_tmp = df_product[["product_cd", "unit_price", "unit_cost"]].copy()
+df_tmp["new_price"] = np.round(df_tmp["unit_cost"] / 0.7)
+df_tmp["new_profit_rate"] = (df_tmp["new_price"] - df_tmp["unit_cost"]) / df_tmp["new_price"]
+df_tmp
+'''
+alternatives = [
+    '''
+df_tmp = df_product[["product_cd", "unit_price", "unit_cost"]].copy()
+df_tmp["new_price"] = np.floor(df_tmp["unit_cost"] / 0.7 + 0.5)
+df_tmp["new_profit_rate"] = (df_tmp["new_price"] - df_tmp["unit_cost"]) / df_tmp["new_price"]
+df_tmp
+''',
+]
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。商品コード・単価・原価・新しい単価・新しい利益率の5列をこの順に出力してください。丸めは四捨五入・偶数への丸めのどちらでも正解とします。"
+reference = '''
+WITH new_price_tbl AS (
+    SELECT product_cd, unit_price, unit_cost, ROUND(unit_cost / 0.7) AS new_price FROM product
+)
+SELECT *, (new_price - unit_cost) / new_price AS new_profit_rate FROM new_price_tbl
+'''
+alternatives = [
+    '''
+WITH new_price_tbl AS (
+    SELECT product_cd, unit_price, unit_cost, ROUND(CAST(unit_cost / 0.7 AS DOUBLE PRECISION)) AS new_price FROM product
+)
+SELECT *, (new_price - unit_cost) / new_price AS new_profit_rate FROM new_price_tbl
+''',
+]

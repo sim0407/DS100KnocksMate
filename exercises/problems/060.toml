@@ -1,0 +1,40 @@
+# P-060 / S-060: 会員の売上金額合計を最小0・最大1に正規化して10件
+id = "060"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。顧客ID・売上金額合計・正規化した値の順に出力してください。"
+reference = '''
+df_sales_amount = (
+    df_receipt.query('not customer_id.str.startswith("Z")', engine="python")
+    .groupby("customer_id")
+    .agg({"amount": "sum"})
+    .reset_index()
+)
+df_sales_amount["scale_amount"] = preprocessing.minmax_scale(df_sales_amount["amount"])
+df_sales_amount
+'''
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。顧客ID・売上金額合計・正規化した値の順に出力してください。"
+reference = '''
+WITH sales_amount AS (
+    SELECT customer_id, SUM(amount) AS sum_amount
+    FROM receipt
+    WHERE customer_id NOT LIKE 'Z%'
+    GROUP BY customer_id
+)
+SELECT customer_id, sum_amount,
+    1.0 * (sum_amount - (SELECT MIN(sum_amount) FROM sales_amount))
+        / ((SELECT MAX(sum_amount) FROM sales_amount) - (SELECT MIN(sum_amount) FROM sales_amount))
+        AS scale_amount
+FROM sales_amount
+'''

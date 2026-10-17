@@ -1,0 +1,29 @@
+# P-050 / S-050: 売上エポック秒から「月」を0埋め2桁の文字列で取り出して10件
+id = "050"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。レシート番号・レシートサブ番号・月（0埋め2桁の文字列）の順に出力してください。"
+reference = '''
+pd.concat(
+    [
+        df_receipt[["receipt_no", "receipt_sub_no"]],
+        pd.to_datetime(df_receipt["sales_epoch"], unit="s").dt.strftime("%m").rename("sales_month"),
+    ],
+    axis=1,
+)
+'''
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。レシート番号・レシートサブ番号・月（0埋め2桁の文字列）の順に出力してください。"
+reference = '''
+SELECT receipt_no, receipt_sub_no, TO_CHAR(EXTRACT(MONTH FROM TO_TIMESTAMP(sales_epoch)), 'FM00') AS sales_month FROM receipt
+'''

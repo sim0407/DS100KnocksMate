@@ -164,3 +164,37 @@ def test_scalar_strategy_rejects_multi_row_table():
     result = grade(ex, "sql", "mine", runner, ReferenceCache())
     assert result.status == "failed"
     assert "1つの値" in result.feedback[0]
+
+
+def test_alternative_reference_is_accepted():
+    ex = exercise(GradingSpec("scalar", reference="REF", alternatives=("ALT",)))
+    scalar = lambda v: {"status": "ok", "result": {"type": "scalar", "value": v, "kind": "float"}}  # noqa: E731
+    runner = FakeRunner({"REF": scalar(1.0), "ALT": scalar(2.0), "mine": scalar(2.0)})
+    assert grade(ex, "python", "mine", runner, ReferenceCache()).status == "passed"
+
+
+def test_alternatives_not_run_when_primary_matches():
+    ex = exercise(GradingSpec("scalar", reference="REF", alternatives=("ALT",)))
+    scalar = {"status": "ok", "result": {"type": "scalar", "value": 1, "kind": "integer"}}
+    runner = FakeRunner({"REF": scalar, "mine": scalar})
+    grade(ex, "python", "mine", runner, ReferenceCache())
+    assert "ALT" not in runner.calls
+
+
+def test_feedback_comes_from_primary_when_all_fail():
+    ex = exercise(GradingSpec("scalar", reference="REF", alternatives=("ALT",)))
+    scalar = lambda v: {"status": "ok", "result": {"type": "scalar", "value": v, "kind": "integer"}}  # noqa: E731
+    runner = FakeRunner({"REF": scalar(1), "ALT": scalar(2), "mine": scalar(3)})
+    result = grade(ex, "python", "mine", runner, ReferenceCache())
+    assert result.status == "failed"
+    assert "3" in result.feedback[0]
+
+
+def test_reference_cache_is_bounded():
+    cache = ReferenceCache(max_entries=2)
+    for i in range(3):
+        cache.get_or_run(("python", f"{i:03d}", "REF"), lambda i=i: {"v": i})
+    assert len(cache) == 2
+    calls = []
+    cache.get_or_run(("python", "000", "REF"), lambda: calls.append(1) or {"v": 0})
+    assert calls == [1]  # 最も古いものから追い出される

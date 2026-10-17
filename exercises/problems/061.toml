@@ -1,0 +1,59 @@
+# P-061 / S-061: 会員の売上金額合計を常用対数化（底10）して10件（0対策の +0.5 はあってもなくても許容）
+id = "061"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。顧客ID・売上金額合計・対数化した値の順に出力してください。0への対策として +0.5 してから対数化しても正解とします。"
+reference = '''
+df_sales_amount = (
+    df_receipt.query('not customer_id.str.startswith("Z")', engine="python")
+    .groupby("customer_id")
+    .agg({"amount": "sum"})
+    .reset_index()
+)
+df_sales_amount["log_amount"] = np.log10(df_sales_amount["amount"])
+df_sales_amount
+'''
+alternatives = [
+    '''
+df_sales_amount = (
+    df_receipt.query('not customer_id.str.startswith("Z")', engine="python")
+    .groupby("customer_id")
+    .agg({"amount": "sum"})
+    .reset_index()
+)
+df_sales_amount["log_amount"] = np.log10(df_sales_amount["amount"] + 0.5)
+df_sales_amount
+''',
+]
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。顧客ID・売上金額合計・対数化した値の順に出力してください。0への対策として +0.5 してから対数化しても正解とします。"
+reference = '''
+WITH sales_amount AS (
+    SELECT customer_id, SUM(amount) AS sum_amount
+    FROM receipt
+    WHERE customer_id NOT LIKE 'Z%'
+    GROUP BY customer_id
+)
+SELECT customer_id, sum_amount, LOG(sum_amount) AS log_amount FROM sales_amount
+'''
+alternatives = [
+    '''
+WITH sales_amount AS (
+    SELECT customer_id, SUM(amount) AS sum_amount
+    FROM receipt
+    WHERE customer_id NOT LIKE 'Z%'
+    GROUP BY customer_id
+)
+SELECT customer_id, sum_amount, LOG(sum_amount + 0.5) AS log_amount FROM sales_amount
+''',
+]

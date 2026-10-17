@@ -62,6 +62,7 @@
 - **問題文の構造**: Markdownセルに `> P-001: 問題文` 形式（複数行の箇条書き条件を含む）。直後のcode cellが解答欄（演習版は空、解答版は1つ以上の解答例。`# コード例1` 等のコメントや補足markdownあり）。
 - **Python共通セットアップ**: 解答Notebook冒頭セル。環境変数 `PG_PORT` が無い場合は CSV を `encoding="utf-8-sig"` と文字列 `dtype`（customer_id, gender_cd, postal_cd, application_store_cd, status_cd, category_*_cd, product_cd, store_cd, prefecture_cd, tel_no, street）で読み込む分岐がある。→ 本アプリのPythonワーカーはこのCSV分岐を採用し、DB接続情報を持たせない。
 - **SQL環境**: Postgresテーブル名は customer / category / product / receipt / store / geocode。コード列は `VARCHAR`。上流Postgresは `postgres:15.1-bullseye`（Notebook内表記は「PostgreSQL13」で不整合あり）。上流の `padawan` ユーザーは DB owner + `pg_read/write_server_files` 付与で、本アプリでは流用しない。
+- **application_date の型（2026-10-18 判明）**: 上流のCSV分岐は `application_date` を型指定しておらず整数で読まれ、046 等の模範解答 `pd.to_datetime(...)` が誤った日時になる。問題文と主環境（DB: VARCHAR(8)）に合わせ、本アプリは文字列で読む（`worker/datasets.py`）。
 - **上流Python環境**: Python 3.11, pandas 1.5.3, numpy 1.24.3, scikit-learn 1.5.0, imbalanced-learn 0.12.3, SQLAlchemy 1.4.46。
 - **採点上の注意（簡易スキャン、確定ではない）**:
   - S-001/002/003/010/011 等は `ORDER BY` なし `LIMIT 10` → 行集合が非決定。

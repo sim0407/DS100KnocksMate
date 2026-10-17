@@ -7,7 +7,8 @@
     {"type": "none"}                         # 最後の式の値が None
 
 index の扱い: 名前のない index（queryで残る行番号など）は捨て、名前付き/MultiIndex
-（groupby の集計キーなど）は列に戻す。pickle 等の任意オブジェクトは返さない。
+（groupby の集計キーなど）は列に戻す。Series の名前のない index が整数以外（列名など
+のラベル）なら列 `index` として残す。pickle 等の任意オブジェクトは返さない。
 """
 
 from __future__ import annotations
@@ -104,7 +105,17 @@ def _restore_index(df: pd.DataFrame) -> pd.DataFrame:
 
 def _table(value: pd.DataFrame | pd.Series, max_rows: int) -> dict:
     if isinstance(value, pd.Series):
+        index = value.index
+        # 名前のない index でも、列名などのラベル（整数以外）なら意味があるので残す
+        # 例: df.isnull().sum() の index は列名。query 等で残る整数の行番号は捨てる
+        keep_labels = (
+            index.name is None
+            and not isinstance(index, pd.MultiIndex)
+            and not pd.api.types.is_integer_dtype(index.dtype)
+        )
         value = value.to_frame(name=value.name if value.name is not None else "value")
+        if keep_labels:
+            value.index = value.index.rename("index")
     df = value.copy(deep=False)
     df.columns = [_column_name(c) for c in df.columns]
     df = _restore_index(df)

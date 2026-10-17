@@ -151,3 +151,21 @@ def test_index_name_colliding_with_column_is_dropped_safely():
     r = roundtrip(df)
     assert r["columns"] == ["a"]
     assert r["rows"] == [[1], [2]]
+
+
+def test_series_with_unnamed_label_index_keeps_index():
+    """isnull().sum() のように index が列名などのラベルなら、名前がなくても残す。"""
+    s = pd.DataFrame({"a": [1, None], "b": [None, None]}).isnull().sum()
+    r = roundtrip(s)
+    assert r["columns"] == ["index", "value"]
+    assert r["rows"] == [["a", 1], ["b", 2]]
+
+
+def test_series_with_default_range_index_drops_index():
+    r = roundtrip(pd.Series([5, 6], name="x"))
+    assert r["columns"] == ["x"]
+
+
+def test_filtered_series_with_integer_index_drops_index():
+    s = pd.Series([1, 2, 3], name="v")
+    assert roundtrip(s[s > 1])["columns"] == ["v"]

@@ -83,6 +83,9 @@
 - **コードエディタ（2026-10-18）**: 既存部品を評価（streamlit-ace: 2021年で停止、streamlit-code-editor: 2024年12月以降更新なし・PyPIにライセンス表記なし、streamlit-monaco: 2023年・Monacoは既定でCDN読込の恐れ、streamlit-monaco-editor: 実績少・CDN未確認）し、いずれも採用せず、Streamlit 1.66 の `st.components.v2` で **依存・CDNなしの自前エディタ**（`app/editor.py`）を実装。Tab/Shift+Tab、自動インデント、行番号、Ctrl+Enter実行、Esc→Tabでフォーカス移動、`execCommand('insertText')` で元に戻すを維持。`setStateValue` は呼ぶたびにスクリプトを再実行するため、送信は「入力欄から離れたとき・Ctrl+Enter・入力停止1.5秒後」。シンタックスハイライトは未対応。標準 `st.text_area`（シンプル）にサイドバーで切替可能。
 - **ブラウザE2E**: AppTest は独自部品を操作できないため、Playwright（`e2e` 依存グループ、Chromium）で実ブラウザ確認（`tests/e2e/test_editor_browser.py`）。この過程で「選択欄のラベル変化でウィジェットが作り直され選択問題が001に戻る」不具合を発見し、`current_exercise` で選択を保持する方式に修正。
 - **公開ポート**: `KNOCKS_PORT`（既定8501、常に 127.0.0.1 のみ）。E2E は 8502 で並行実行。
+- **採点対象の拡大（2026-10-18）**: 62問/言語を自動採点。追加した仕組み: (1) `alternatives`（許容する別の参照。まず reference と比較し、不一致のときだけ順に試す。不正解の理由は reference との比較から作る）、(2) 日時の正規化（タイムゾーン付きはUTCへ、深夜0時は日付へ）、(3) Series の名前なし index が整数以外（列名などのラベル）なら列 `index` として残す、(4) 参照結果キャッシュを LRU（既定4件）に。実測で10万行級の参照を続けて採点してもアプリのメモリは約250MB。
+- **application_date の型**: 上流CSV分岐では整数になるが、問題文と上流の主環境（DB）に合わせて文字列で読む（`worker/datasets.py`）。
+- **上流解答セルの扱い**: 単独では完全な解答にならないセル（055の確認用・前セル依存・題意を満たさない参考、069の横持ち参考例）は「模範解答が正解になる」テストの対象外とし、理由を `tests/integration/test_grading_cases.py` に記載。
 - **pyarrow**: 当面入れない（pandas 3 の文字列型はPython実装で動作）。性能問題が出たら再検討。
 - **自作部分のライセンス**: MITを第一候補（Phase 4で最終確認）。名称は仮称のまま（リポジトリ名 `DS100KnocksMate` / 文書上の「100 Knocks Trainer」の統一はPhase 4）。
 

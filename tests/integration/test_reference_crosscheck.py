@@ -8,6 +8,7 @@
 """
 
 import json
+import math
 import os
 import re
 from functools import cache
@@ -58,7 +59,10 @@ def notebook_python(outputs: list[dict]) -> tuple[str, object]:
     m = re.search(r"\[(\d+) rows x \d+ columns\]", text)
     if m:
         return "rows", int(m.group(1))
-    index_tokens = {line.split()[0] for line in text.splitlines() if re.match(r"^\d+\s{2,}", line)}
+    lines = text.splitlines()
+    if lines and lines[-1].startswith(("dtype:", "Name:")):  # Series の表示
+        return "rows", len([line for line in lines if not line.startswith(("dtype:", "Name:"))])
+    index_tokens = {line.split()[0] for line in lines if re.match(r"^\d+\s+\S", line)}
     if index_tokens:
         return "rows", len(index_tokens)
     return "value", text.strip()
@@ -67,6 +71,14 @@ def notebook_python(outputs: list[dict]) -> tuple[str, object]:
 def notebook_sql_rows(outputs: list[dict]) -> int:
     text = "".join("".join(o.get("text", [])) for o in outputs if o.get("output_type") == "stream")
     return int(re.search(r"(\d+) rows affected", text).group(1))
+
+
+def values_match(value, text: str) -> bool:
+    """Notebook の表示は浮動小数点を丸めて表示するため、数値は誤差を許容して比べる。"""
+    try:
+        return math.isclose(float(value), float(text), rel_tol=1e-9)
+    except (TypeError, ValueError):
+        return str(value) == text
 
 
 CASES = [
@@ -89,7 +101,7 @@ def test_model_answer_matches_notebook_output(exercise_id, language):
         if kind == "rows":
             assert result["row_count"] == expected
         else:
-            assert str(result["value"]) == expected
+            assert values_match(result["value"], expected)
     else:
         response = run_sql(code, dsn=DB_DSN, max_rows=1000)
         assert response["status"] == "ok", response["error"]

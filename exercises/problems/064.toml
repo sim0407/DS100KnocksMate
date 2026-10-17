@@ -1,0 +1,11 @@
+# P-064 / S-064: 各商品の利益率の全体平均（欠損は除く、値）
+id = "064"
+status = "verified"
+
+[python]
+strategy = "scalar"
+reference = '((df_product["unit_price"] - df_product["unit_cost"]) / df_product["unit_price"]).mean()'
+
+[sql]
+strategy = "scalar"
+reference = 'SELECT AVG((unit_price * 1.0 - unit_cost) / unit_price) FROM product'

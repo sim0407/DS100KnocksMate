@@ -1,0 +1,17 @@
+# P-012 / S-012: 住所に「横浜市」を含む店舗を全件（順序なし）
+id = "012"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "unordered"
+reference = '''
+df_store.query("address.str.contains('横浜市')", engine="python")
+'''
+
+[sql]
+strategy = "table"
+rows = "unordered"
+reference = '''
+SELECT * FROM store WHERE address LIKE '%横浜市%'
+'''

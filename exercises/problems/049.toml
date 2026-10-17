@@ -1,0 +1,27 @@
+# P-049 / S-049: 売上エポック秒から「年」を取り出して10件
+id = "049"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。レシート番号・レシートサブ番号・年の順に出力してください。"
+reference = '''
+pd.concat(
+    [
+        df_receipt[["receipt_no", "receipt_sub_no"]],
+        pd.to_datetime(df_receipt["sales_epoch"], unit="s").dt.year.rename("sales_year"),
+    ],
+    axis=1,
+)
+'''
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。レシート番号・レシートサブ番号・年の順に出力してください。"
+reference = 'SELECT receipt_no, receipt_sub_no, EXTRACT(YEAR FROM TO_TIMESTAMP(sales_epoch)) AS sales_year FROM receipt'

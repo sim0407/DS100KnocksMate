@@ -159,3 +159,24 @@ note = "値だけを判定します"
 def test_manual_review_spec_requires_reason():
     with pytest.raises(ValueError, match="reason"):
         parse('id = "001"\nstatus = "verified"\n[python]\nstrategy = "manual_review"')
+
+
+def test_parse_alternatives():
+    _, grading = parse(
+        """
+id = "001"
+status = "verified"
+[python]
+strategy = "scalar"
+reference = "a"
+alternatives = ["b", "c"]
+"""
+    )
+    assert grading["python"].alternatives == ("b", "c")
+
+
+def test_alternatives_must_be_list_of_code():
+    with pytest.raises(ValueError, match="alternatives"):
+        parse(
+            'id = "001"\nstatus = "verified"\n[python]\nstrategy = "scalar"\nreference = "a"\nalternatives = "b"'
+        )

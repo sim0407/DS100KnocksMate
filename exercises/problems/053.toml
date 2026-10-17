@@ -1,0 +1,35 @@
+# P-053 / S-053: 郵便番号で東京/それ以外に二値化し、売上実績のある顧客数を二値ごとにカウント
+id = "053"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "unordered"
+column_names = false
+note = "列名は問いません。二値（0/1）・顧客数の順に出力してください。"
+reference = '''
+df_tmp = df_customer[["customer_id", "postal_cd"]].copy()
+df_tmp["postal_flg"] = np.where(df_tmp["postal_cd"].str[0:3].astype(int).between(100, 209), 1, 0)
+pd.merge(df_tmp, df_receipt, how="inner", on="customer_id").groupby("postal_flg").agg(
+    {"customer_id": "nunique"}
+)
+'''
+
+[sql]
+strategy = "table"
+rows = "unordered"
+column_names = false
+note = "列名は問いません。二値（0/1）・顧客数の順に出力してください。"
+reference = '''
+WITH cust AS (
+    SELECT
+        customer_id,
+        CASE WHEN CAST(SUBSTR(postal_cd, 1, 3) AS INTEGER) BETWEEN 100 AND 209 THEN 1 ELSE 0 END
+            AS postal_flg
+    FROM customer
+)
+SELECT c.postal_flg, COUNT(DISTINCT c.customer_id) AS customer_cnt
+FROM cust c
+JOIN (SELECT DISTINCT customer_id FROM receipt) r USING (customer_id)
+GROUP BY c.postal_flg
+'''

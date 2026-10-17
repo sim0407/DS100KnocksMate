@@ -1,0 +1,27 @@
+# P-030 / S-030: 店舗ごとの売上金額の分散、降順5件（母分散・不偏分散のどちらも許容）
+id = "030"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "top_n"
+n = 5
+sort_keys = [{ column = "amount", descending = true }]
+column_names = false
+note = "列名は問いません。店舗コード・分散の順に出力してください。分散は母集団（ddof=0）・標本（不偏, ddof=1）のどちらでも正解とします。"
+reference = 'df_receipt.groupby("store_cd").amount.var(ddof=0).reset_index()'
+alternatives = [
+    'df_receipt.groupby("store_cd").amount.var(ddof=1).reset_index()',
+]
+
+[sql]
+strategy = "table"
+rows = "top_n"
+n = 5
+sort_keys = [{ column = "vars_amount", descending = true }]
+column_names = false
+note = "列名は問いません。店舗コード・分散の順に出力してください。分散は母集団（ddof=0）・標本（不偏, ddof=1）のどちらでも正解とします。"
+reference = 'SELECT store_cd, VAR_POP(amount) AS vars_amount FROM receipt GROUP BY store_cd'
+alternatives = [
+    'SELECT store_cd, VAR_SAMP(amount) AS vars_amount FROM receipt GROUP BY store_cd',
+]

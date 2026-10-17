@@ -1,0 +1,19 @@
+# P-034 / S-034: 非会員を除いた顧客ごとの売上金額合計の平均（値）
+id = "034"
+status = "verified"
+
+[python]
+strategy = "scalar"
+reference = 'df_receipt[~df_receipt["customer_id"].str.startswith("Z")].groupby("customer_id").amount.sum().mean()'
+
+[sql]
+strategy = "scalar"
+reference = '''
+WITH customer_amount AS (
+    SELECT customer_id, SUM(amount) AS sum_amount
+    FROM receipt
+    WHERE customer_id NOT LIKE 'Z%'
+    GROUP BY customer_id
+)
+SELECT AVG(sum_amount) FROM customer_amount
+'''

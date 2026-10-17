@@ -2,6 +2,10 @@
 
 上流: docker/work/answer/ans_preprocess_knock_Python.ipynb 冒頭セル（PG_PORT未設定時の分岐）。
 コード値のゼロ埋め（例: category_major_cd "04"）を壊さないよう、該当列は文字列として読む。
+
+上流との差分: 上流のCSV分岐は application_date を型指定しておらず整数として読まれるが、
+問題文（046, 070〜073「application_dateは文字列」）と上流の主環境（DBの VARCHAR(8) を
+read_sql で読む）に合わせて文字列として読む。
 """
 
 from __future__ import annotations
@@ -24,7 +28,7 @@ DEFAULT_DATA_DIR = (
 # 公式セットアップと同じ順序・変数名（df_<table>）
 TABLES = ("customer", "category", "product", "receipt", "store", "geocode")
 
-# 公式セットアップの dtype 指定をそのまま採用
+# 公式セットアップの dtype 指定 + application_date（上記の差分）
 STRING_COLUMNS = {
     col: str
     for col in (
@@ -32,6 +36,7 @@ STRING_COLUMNS = {
         "gender_cd",
         "postal_cd",
         "application_store_cd",
+        "application_date",
         "status_cd",
         "category_major_cd",
         "category_medium_cd",

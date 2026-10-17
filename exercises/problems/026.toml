@@ -1,0 +1,23 @@
+# P-026 / S-026: 最新と最古の売上年月日が異なる顧客を10件
+id = "026"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。顧客ID・最も新しい売上年月日・最も古い売上年月日の順に出力してください。"
+reference = '''
+df_tmp = df_receipt.groupby("customer_id").agg({"sales_ymd": ["max", "min"]}).reset_index()
+df_tmp.columns = ["customer_id", "sales_ymd_max", "sales_ymd_min"]
+df_tmp.query("sales_ymd_max != sales_ymd_min")
+'''
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。顧客ID・最も新しい売上年月日・最も古い売上年月日の順に出力してください。"
+reference = 'SELECT customer_id, MAX(sales_ymd), MIN(sales_ymd) FROM receipt GROUP BY customer_id HAVING MAX(sales_ymd) != MIN(sales_ymd)'

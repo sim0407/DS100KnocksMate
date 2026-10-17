@@ -1,0 +1,55 @@
+# P-054 / S-054: 住所から都道府県コードを作成し顧客ID・住所とともに10件（コードは文字列/数値どちらも許容）
+id = "054"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。顧客ID・住所・都道府県コードの順に出力してください。コード値は文字列・数値のどちらでも正解とします。"
+reference = '''
+df_tmp = df_customer[["customer_id", "address"]].copy()
+df_tmp["prefecture_cd"] = df_customer["address"].str.extract(r"(^.*?[都道府県])")[0].map({"埼玉県": "11", "千葉県": "12", "東京都": "13", "神奈川県": "14"})
+df_tmp
+'''
+alternatives = [
+    '''
+df_tmp = df_customer[["customer_id", "address"]].copy()
+df_tmp["prefecture_cd"] = df_customer["address"].str.extract(r"(^.*?[都道府県])")[0].map({"埼玉県": 11, "千葉県": 12, "東京都": 13, "神奈川県": 14})
+df_tmp
+''',
+]
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。顧客ID・住所・都道府県コードの順に出力してください。コード値は文字列・数値のどちらでも正解とします。"
+reference = '''
+SELECT
+    customer_id,
+    address,
+    CASE
+        WHEN address LIKE '埼玉県%' THEN '11'
+        WHEN address LIKE '千葉県%' THEN '12'
+        WHEN address LIKE '東京都%' THEN '13'
+        WHEN address LIKE '神奈川県%' THEN '14'
+    END AS prefecture_cd
+FROM customer
+'''
+alternatives = [
+    '''
+SELECT
+    customer_id,
+    address,
+    CASE
+        WHEN address LIKE '埼玉県%' THEN 11
+        WHEN address LIKE '千葉県%' THEN 12
+        WHEN address LIKE '東京都%' THEN 13
+        WHEN address LIKE '神奈川県%' THEN 14
+    END AS prefecture_cd
+FROM customer
+''',
+]

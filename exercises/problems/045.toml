@@ -1,0 +1,26 @@
+# P-045 / S-045: 生年月日をYYYYMMDD形式の文字列にして顧客IDとともに10件
+id = "045"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。顧客ID・生年月日（YYYYMMDD形式の文字列）の順に出力してください。"
+reference = '''
+pd.concat(
+    [df_customer["customer_id"], pd.to_datetime(df_customer["birth_day"]).dt.strftime("%Y%m%d")],
+    axis=1,
+)
+'''
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。顧客ID・生年月日（YYYYMMDD形式の文字列）の順に出力してください。"
+reference = '''
+SELECT customer_id, TO_CHAR(birth_day, 'YYYYMMDD') AS birth_day FROM customer
+'''

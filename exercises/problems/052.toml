@@ -1,0 +1,30 @@
+# P-052 / S-052: 会員ごとの売上金額合計を2,000円で二値化して10件
+id = "052"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。顧客ID・売上金額合計・二値（0/1）の順に出力してください。"
+reference = '''
+df_sales_amount = (
+    df_receipt.query('not customer_id.str.startswith("Z")', engine="python")[["customer_id", "amount"]]
+    .groupby("customer_id")
+    .sum()
+    .reset_index()
+)
+df_sales_amount["sales_flg"] = np.where(df_sales_amount["amount"] > 2000, 1, 0)
+df_sales_amount
+'''
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。顧客ID・売上金額合計・二値（0/1）の順に出力してください。"
+reference = '''
+SELECT customer_id, SUM(amount) AS sum_amount, CASE WHEN SUM(amount) > 2000 THEN 1 ELSE 0 END AS sales_flg FROM receipt WHERE customer_id NOT LIKE 'Z%' GROUP BY customer_id
+'''

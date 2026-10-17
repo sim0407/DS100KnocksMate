@@ -1,0 +1,22 @@
+# P-037 / S-037: 商品とカテゴリを内部結合し、商品の全項目＋カテゴリ小区分名を10件
+id = "037"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+reference = '''
+pd.merge(
+    df_product,
+    df_category[["category_small_cd", "category_small_name"]],
+    how="inner",
+    on="category_small_cd",
+)
+'''
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+reference = 'SELECT p.*, c.category_small_name FROM product p JOIN category c ON p.category_small_cd = c.category_small_cd'

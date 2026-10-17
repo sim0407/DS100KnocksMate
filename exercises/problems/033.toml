@@ -1,0 +1,17 @@
+# P-033 / S-033: 店舗ごとの売上金額の平均が330以上の店舗（順序なし）
+id = "033"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "unordered"
+column_names = false
+note = "列名は問いません。店舗コード・平均売上金額の順に出力してください。"
+reference = 'df_receipt.groupby("store_cd").amount.mean().reset_index().query("amount >= 330")'
+
+[sql]
+strategy = "table"
+rows = "unordered"
+column_names = false
+note = "列名は問いません。店舗コード・平均売上金額の順に出力してください。"
+reference = 'SELECT store_cd, AVG(amount) AS avg_amount FROM receipt GROUP BY store_cd HAVING AVG(amount) >= 330'

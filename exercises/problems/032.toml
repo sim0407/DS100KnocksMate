@@ -1,0 +1,30 @@
+# P-032 / S-032: 売上金額の25%刻みのパーセンタイル値（並び順どおりの値）
+id = "032"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "ordered"
+column_names = false
+note = "25%・50%・75%・100%のパーセンタイル値を、この順に返してください（NumPy配列・Series・1列の表のいずれでも可）。"
+reference = 'np.percentile(df_receipt["amount"], q=np.arange(1, 5) * 25)'
+alternatives = [
+    'df_receipt["amount"].quantile(np.arange(1, 5) / 4)',
+]
+
+[sql]
+strategy = "table"
+rows = "ordered"
+column_names = false
+note = "列名は問いません。25%・50%・75%・100%のパーセンタイル値を、1行（4列）または1列（4行）で、この順に出力してください。"
+reference = '''
+SELECT
+    PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY amount) AS amount_25per,
+    PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY amount) AS amount_50per,
+    PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY amount) AS amount_75per,
+    PERCENTILE_CONT(1.0) WITHIN GROUP (ORDER BY amount) AS amount_100per
+FROM receipt
+'''
+alternatives = [
+    'SELECT UNNEST(PERCENTILE_CONT(ARRAY[0.25, 0.5, 0.75, 1.0]) WITHIN GROUP (ORDER BY amount))',
+]

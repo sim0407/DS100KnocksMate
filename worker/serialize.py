@@ -38,6 +38,10 @@ def serialize_value(value: Any, *, max_rows: int = 200, max_text_chars: int = 20
         return {"type": "none"}
     if isinstance(value, (pd.DataFrame, pd.Series)):
         return _table(value, max_rows)
+    if isinstance(value, np.ndarray) and value.ndim in (1, 2):
+        # np.percentile 等の結果。1次元は列 value、2次元は列 0, 1, ... の表として扱う
+        frame = pd.DataFrame(value) if value.ndim == 2 else pd.Series(value, name="value")
+        return _table(frame, max_rows)
     scalar = _scalar(value)
     if scalar is not None:
         return scalar

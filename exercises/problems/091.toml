@@ -1,0 +1,27 @@
+# P-091 / S-091: 売上実績あり/なしが1:1となるアンダーサンプリング（性質で採点）
+id = "091"
+status = "verified"
+
+[python]
+strategy = "custom"
+artifacts = [
+    'df_down_sampling',
+]
+validator = "undersampling"
+note = "抽出したデータを変数 df_down_sampling に入れてください（customer_id 列を含めること）。乱数を使うため、売上実績あり/なしが1:1で、件数が少ない方の顧客は全件含まれていることを確かめます。"
+reference = '''
+df_tmp = df_receipt.groupby("customer_id").agg({"amount": "sum"}).reset_index()
+df_u = pd.merge(df_customer[["customer_id"]], df_tmp, how="left", on="customer_id")
+df_u["is_buy"] = np.where(df_u["amount"].isnull(), 0, 1)
+df_u[["customer_id", "is_buy"]]
+'''
+
+[sql]
+strategy = "custom"
+writable = true
+artifacts = [
+    'down_sampling',
+]
+validator = "undersampling"
+note = "抽出したデータをテーブル down_sampling にしてください（customer_id 列を含めること。一時テーブルでも可）。乱数を使うため、売上実績あり/なしが1:1で、件数が少ない方の顧客は全件含まれていることを確かめます。"
+reference = 'SELECT c.customer_id, CASE WHEN EXISTS (SELECT 1 FROM receipt r WHERE r.customer_id = c.customer_id) THEN 1 ELSE 0 END AS is_buy FROM customer c'

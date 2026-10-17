@@ -1,0 +1,22 @@
+# P-080 / S-080: 欠損のある商品を削除した新しい商品データ（作成したデータを採点）
+id = "080"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "unordered"
+artifacts = [
+    'df_product_1',
+]
+note = "作成した商品データを変数 df_product_1 に入れてください（このデータを採点します）。削除前後の件数の表示は採点しません。"
+reference = 'df_product_1 = df_product.dropna()'
+
+[sql]
+strategy = "table"
+rows = "unordered"
+writable = true
+artifacts = [
+    'product_1',
+]
+note = "作成した商品データをテーブル product_1 にしてください（このテーブルを採点します。実行後に取り消されます）。削除前後の件数の表示は採点しません。"
+reference = 'CREATE TABLE product_1 AS (SELECT * FROM product WHERE unit_price IS NOT NULL AND unit_cost IS NOT NULL)'

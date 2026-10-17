@@ -188,3 +188,105 @@ def test_empty_sql():
 def test_unavailable_database():
     r = run_sql("SELECT 1", dsn="host=127.0.0.1 port=1 dbname=x user=x connect_timeout=1")
     assert r["status"] == "unavailable"
+
+
+# ---------------------------------------------------------------- 書き込み可能モード（テーブル作成、必ずロールバック）
+
+
+def write(sql, **kwargs):
+    return run_sql(sql, dsn=DSN, writable=True, **kwargs)
+
+
+def test_writable_create_table_and_select():
+    r = write(
+        "DROP TABLE IF EXISTS product_1;\n"
+        "CREATE TABLE product_1 AS (SELECT * FROM product WHERE unit_price IS NOT NULL);\n"
+        "SELECT COUNT(*) AS n FROM product_1;"
+    )
+    assert r["status"] == "ok", r["error"]
+    assert r["result"]["rows"] == [[10023]]
+
+
+def test_writable_changes_are_rolled_back():
+    write("CREATE TABLE leftover AS SELECT 1 AS a; SELECT 1")
+    r = run("SELECT * FROM leftover")
+    assert r["status"] == "error"
+    assert "leftover" in r["error"]["message"]
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "DELETE FROM product",
+        "UPDATE product SET unit_price = 0",
+        "DROP TABLE product",
+        "ALTER TABLE product ADD COLUMN x int",
+        "TRUNCATE product",
+        "CREATE TABLE public.evil AS SELECT 1",
+        "SET ROLE postgres",
+    ],
+)
+def test_writable_cannot_touch_teaching_tables(sql):
+    r = write(sql + "; SELECT 1")
+    assert r["status"] == "error"
+    assert count("product") == 10030
+
+
+def test_writable_temp_table_and_multiple_selects_returns_last():
+    r = write("CREATE TEMP TABLE t AS SELECT 1 AS a;\nSELECT 'first';\nSELECT a + 1 AS b FROM t;")
+    assert r["result"]["columns"] == ["b"]
+    assert r["result"]["rows"] == [[2]]
+
+
+def test_writable_script_without_select_has_no_result():
+    r = write("CREATE TABLE t AS SELECT 1 AS a;")
+    assert r["status"] == "ok"
+    assert r["result"] is None
+
+
+def test_writable_error_line_number_in_later_statement():
+    r = write("CREATE TABLE t AS SELECT 1 AS a;\n\nSELECT\n  no_such_col\nFROM t;")
+    assert r["status"] == "error"
+    assert r["error"]["lineno"] == 4
+
+
+def test_setup_runs_before_learner_sql():
+    r = write(
+        "SELECT era FROM sales_summary ORDER BY era",
+        setup="CREATE TABLE sales_summary AS SELECT 10 AS era UNION ALL SELECT 20",
+    )
+    assert r["result"]["rows"] == [[10], [20]]
+
+
+def test_copy_to_stdout_is_captured_as_file():
+    import base64
+
+    r = write("COPY (SELECT 'a' AS x, 1 AS n) TO STDOUT WITH CSV HEADER;")
+    assert r["status"] == "ok"
+    (f,) = r["files"]
+    assert base64.b64decode(f["content_b64"]) == b"x,n\na,1\n"
+
+
+def test_copy_to_server_file_is_rejected_with_hint():
+    r = write("COPY product TO '/tmp/x.csv' WITH CSV;")
+    assert r["status"] == "error"
+    assert "STDOUT" in r["error"]["message"]
+
+
+def test_copy_from_stdin_reads_prepared_data():
+    r = write(
+        "CREATE TABLE t (x text, n int);\nCOPY t FROM STDIN WITH CSV HEADER;\nSELECT * FROM t;",
+        stdin_query="COPY (SELECT 'a' AS x, 1 AS n) TO STDOUT WITH CSV HEADER",
+    )
+    assert r["status"] == "ok", r["error"]
+    assert r["result"]["rows"] == [["a", 1]]
+
+
+def test_copy_from_stdin_without_prepared_data_is_error():
+    r = write("CREATE TABLE t (x text); COPY t FROM STDIN;")
+    assert r["status"] == "error"
+
+
+def test_read_only_mode_still_rejects_multiple_statements():
+    r = run("CREATE TABLE t AS SELECT 1; SELECT 1")
+    assert r["status"] == "error"

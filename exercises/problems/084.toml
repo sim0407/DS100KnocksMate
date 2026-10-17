@@ -1,0 +1,40 @@
+# P-084 / S-084: 全期間の売上金額に占める2019年売上の割合（作成したデータを採点）
+id = "084"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "unordered"
+column_names = false
+artifacts = [
+    'df_sales_rate',
+]
+note = "作成したデータを変数 df_sales_rate に入れてください。列名は問いません。顧客ID・2019年の売上金額合計・全期間の売上金額合計・割合の4列で、全顧客について作成してください。0超の抽出・10件表示・欠損の確認は採点しません。"
+reference = '''
+df_2019 = df_receipt.query("20190101 <= sales_ymd <= 20191231").groupby("customer_id").agg(amount_2019=("amount", "sum")).reset_index()
+df_all = df_receipt.groupby("customer_id").agg(amount_all=("amount", "sum")).reset_index()
+df_sales_rate = df_customer[["customer_id"]].merge(df_2019, how="left", on="customer_id").merge(df_all, how="left", on="customer_id")
+df_sales_rate[["amount_2019", "amount_all"]] = df_sales_rate[["amount_2019", "amount_all"]].fillna(0)
+df_sales_rate["amount_rate"] = np.where(df_sales_rate["amount_2019"] == 0, 0, df_sales_rate["amount_2019"] / df_sales_rate["amount_all"])
+'''
+
+[sql]
+strategy = "table"
+rows = "unordered"
+column_names = false
+writable = true
+artifacts = [
+    'sales_rate',
+]
+note = "作成したデータをテーブル sales_rate にしてください（実行後に取り消されます）。列名は問いません。顧客ID・2019年の売上金額合計・全期間の売上金額合計・割合の4列で、全顧客について作成してください。0超の抽出・10件表示・欠損の確認は採点しません。"
+reference = '''
+CREATE TABLE sales_rate AS (
+    WITH a2019 AS (
+        SELECT customer_id, SUM(amount) AS s FROM receipt WHERE sales_ymd BETWEEN 20190101 AND 20191231 GROUP BY customer_id
+    ),
+    a_all AS (SELECT customer_id, SUM(amount) AS s FROM receipt GROUP BY customer_id)
+    SELECT c.customer_id, COALESCE(b.s, 0) AS s2019, COALESCE(d.s, 0) AS sall,
+        CASE COALESCE(d.s, 0) WHEN 0 THEN 0 ELSE COALESCE(b.s, 0) * 1.0 / d.s END AS sales_rate
+    FROM customer c LEFT JOIN a2019 b ON c.customer_id = b.customer_id LEFT JOIN a_all d ON c.customer_id = d.customer_id
+)
+'''

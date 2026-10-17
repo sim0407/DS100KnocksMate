@@ -1,0 +1,89 @@
+# P-073 / S-073: 売上日と会員申込日からエポック秒による経過時間を計算して10件
+id = "073"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。顧客ID・売上日・会員申込日・エポック秒による経過時間の4列をこの順に出力してください。売上日・申込日は元の形でも日付型に変換していても、同じ売上日の重複を除いていてもいなくても正解とします。"
+reference = '''
+df_tmp = df_receipt[["customer_id", "sales_ymd"]].drop_duplicates()
+df_tmp = pd.merge(df_tmp, df_customer[["customer_id", "application_date"]], how="inner", on="customer_id")
+
+sales = pd.to_datetime(df_tmp["sales_ymd"].astype("str"))
+applied = pd.to_datetime(df_tmp["application_date"])
+df_tmp["elapsed_epoch"] = (sales - applied).dt.total_seconds()
+df_tmp
+'''
+alternatives = [
+    '''
+df_tmp = df_receipt[["customer_id", "sales_ymd"]].drop_duplicates()
+df_tmp = pd.merge(df_tmp, df_customer[["customer_id", "application_date"]], how="inner", on="customer_id")
+
+sales = pd.to_datetime(df_tmp["sales_ymd"].astype("str"))
+applied = pd.to_datetime(df_tmp["application_date"])
+df_tmp["elapsed_epoch"] = (sales - applied).dt.total_seconds()
+df_tmp["sales_ymd"] = sales
+df_tmp["application_date"] = applied
+df_tmp
+''',
+    '''
+df_tmp = pd.merge(
+    df_receipt[["customer_id", "sales_ymd"]],
+    df_customer[["customer_id", "application_date"]],
+    how="inner",
+    on="customer_id",
+)
+
+sales = pd.to_datetime(df_tmp["sales_ymd"].astype("str"))
+applied = pd.to_datetime(df_tmp["application_date"])
+df_tmp["elapsed_epoch"] = (sales - applied).dt.total_seconds()
+df_tmp
+''',
+    '''
+df_tmp = pd.merge(
+    df_receipt[["customer_id", "sales_ymd"]],
+    df_customer[["customer_id", "application_date"]],
+    how="inner",
+    on="customer_id",
+)
+
+sales = pd.to_datetime(df_tmp["sales_ymd"].astype("str"))
+applied = pd.to_datetime(df_tmp["application_date"])
+df_tmp["elapsed_epoch"] = (sales - applied).dt.total_seconds()
+df_tmp["sales_ymd"] = sales
+df_tmp["application_date"] = applied
+df_tmp
+''',
+]
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。顧客ID・売上日・会員申込日・エポック秒による経過時間の4列をこの順に出力してください。売上日・申込日は元の形でも日付型に変換していても、同じ売上日の重複を除いていてもいなくても正解とします。"
+reference = '''
+SELECT c.customer_id, r.sales_ymd, c.application_date,
+    EXTRACT(EPOCH FROM TO_TIMESTAMP(CAST(r.sales_ymd AS VARCHAR), 'YYYYMMDD') - TO_TIMESTAMP(c.application_date, 'YYYYMMDD')) AS elapsed
+FROM (SELECT DISTINCT customer_id, sales_ymd FROM receipt) r JOIN customer c ON r.customer_id = c.customer_id
+'''
+alternatives = [
+    '''
+SELECT c.customer_id, TO_DATE(CAST(r.sales_ymd AS VARCHAR), 'YYYYMMDD'), TO_DATE(c.application_date, 'YYYYMMDD'),
+    EXTRACT(EPOCH FROM TO_TIMESTAMP(CAST(r.sales_ymd AS VARCHAR), 'YYYYMMDD') - TO_TIMESTAMP(c.application_date, 'YYYYMMDD')) AS elapsed
+FROM (SELECT DISTINCT customer_id, sales_ymd FROM receipt) r JOIN customer c ON r.customer_id = c.customer_id
+''',
+    '''
+SELECT c.customer_id, r.sales_ymd, c.application_date,
+    EXTRACT(EPOCH FROM TO_TIMESTAMP(CAST(r.sales_ymd AS VARCHAR), 'YYYYMMDD') - TO_TIMESTAMP(c.application_date, 'YYYYMMDD')) AS elapsed
+FROM receipt r JOIN customer c ON r.customer_id = c.customer_id
+''',
+    '''
+SELECT c.customer_id, TO_DATE(CAST(r.sales_ymd AS VARCHAR), 'YYYYMMDD'), TO_DATE(c.application_date, 'YYYYMMDD'),
+    EXTRACT(EPOCH FROM TO_TIMESTAMP(CAST(r.sales_ymd AS VARCHAR), 'YYYYMMDD') - TO_TIMESTAMP(c.application_date, 'YYYYMMDD')) AS elapsed
+FROM receipt r JOIN customer c ON r.customer_id = c.customer_id
+''',
+]

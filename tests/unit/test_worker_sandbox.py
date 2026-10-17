@@ -105,3 +105,28 @@ def test_subprocesses_are_killed_on_timeout(base, tmp_path):
     pid = int(pid_file.read_text())
     time.sleep(0.2)
     assert not _alive(pid)
+
+
+def test_data_directory_is_reachable_as_dot_and_parent(base):
+    code = (
+        "open('data/a.csv', 'w').write('x,y\\n1,2\\n')\n"
+        "open('../data/b.tsv', 'w').write('x\\ty\\n')\n"
+        "sorted(__import__('os').listdir('data'))"
+    )
+    r = run_in_sandbox(code, base, limits=Limits(), collect_files=True)
+    assert r["status"] == "ok"
+    files = {f["path"]: f for f in r["files"]}
+    assert set(files) == {"data/a.csv", "data/b.tsv"}
+    import base64
+
+    assert base64.b64decode(files["data/a.csv"]["content_b64"]) == b"x,y\n1,2\n"
+
+
+def test_files_not_collected_by_default(base):
+    r = run("open('data/a.csv', 'w').write('x')\n1", base)
+    assert "files" not in r or r["files"] == []
+
+
+def test_setup_through_sandbox(base):
+    r = run_in_sandbox("y + 1", base, limits=Limits(), setup="y = 41")
+    assert r["result"]["value"] == 42

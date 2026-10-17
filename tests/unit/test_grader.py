@@ -35,7 +35,7 @@ class FakeRunner:
         self.responses = responses
         self.calls = []
 
-    def __call__(self, code, max_rows, timeout_sec):
+    def __call__(self, code, max_rows, timeout_sec, options=None):
         self.calls.append(code)
         return self.responses[code]
 
@@ -198,3 +198,106 @@ def test_reference_cache_is_bounded():
     calls = []
     cache.get_or_run(("python", "000", "REF"), lambda: calls.append(1) or {"v": 0})
     assert calls == [1]  # 最も古いものから追い出される
+
+
+# ---------------------------------------------------------------- 作ったデータ（artifact）・ファイル・性質
+
+
+class RecordingRunner(FakeRunner):
+    """コードの末尾に付け足された変数名/テーブル名で応答を決める。"""
+
+    def __call__(self, code, max_rows, timeout_sec, options=None):
+        self.calls.append((code, options))
+        last = code.strip().splitlines()[-1]
+        return self.responses.get(last, self.responses.get(code))
+
+
+def test_artifact_is_appended_and_graded():
+    spec = GradingSpec("table", reference="REF", table=TableSpec(), artifacts=("df_product_1",))
+    runner = RecordingRunner({"df_product_1": table(["a"], [[1]])})
+    result = grade(exercise(spec), "python", "df_product_1 = ...", runner, ReferenceCache())
+    assert result.status == "passed"
+    assert runner.calls[0][0] == "df_product_1 = ...\ndf_product_1"
+
+
+def test_missing_artifact_message():
+    spec = GradingSpec("table", reference="REF", table=TableSpec(), artifacts=("df_product_1",))
+    missing = failure("error", "NameError", "name 'df_product_1' is not defined", 2)
+    runner = RecordingRunner({"df_product_1": missing})
+    result = grade(exercise(spec), "python", "x = 1", runner, ReferenceCache())
+    assert result.status == "failed"
+    assert "df_product_1" in result.feedback[0]
+    assert "見つかりません" in result.feedback[0]
+
+
+def test_sql_artifact_appends_select():
+    spec = GradingSpec(
+        "table", reference="REF", table=TableSpec(), artifacts=("product_1",), writable=True
+    )
+    runner = RecordingRunner({"SELECT * FROM product_1": table(["a"], [[1]])})
+    result = grade(
+        exercise(spec), "sql", "CREATE TABLE product_1 AS SELECT 1 AS a;", runner, ReferenceCache()
+    )
+    assert result.status == "passed"
+    code, options = runner.calls[0]
+    assert code.endswith("SELECT * FROM product_1")
+    assert options.writable is True
+
+
+def test_multiple_artifacts_all_must_match():
+    spec = GradingSpec("table", reference="REF", table=TableSpec(), artifacts=("a", "b"))
+    runner = RecordingRunner({"a": table(["x"], [[1]]), "b": table(["x"], [[2]])})
+    assert grade(exercise(spec), "python", "...", runner, ReferenceCache()).status == "passed"
+
+
+def test_setup_is_passed_to_runner():
+    spec = GradingSpec("scalar", reference="REF", setup="df = 1")
+    scalar = {"status": "ok", "result": {"type": "scalar", "value": 1, "kind": "integer"}}
+    runner = RecordingRunner({"REF": scalar, "mine": scalar})
+    grade(exercise(spec), "python", "mine", runner, ReferenceCache())
+    assert all(options.setup == "df = 1" for _, options in runner.calls)
+
+
+def b64(text):
+    import base64
+
+    return base64.b64encode(text.encode()).decode()
+
+
+def test_file_strategy():
+    from core.grading.files import FileFormat
+
+    spec = GradingSpec("file", reference="REF", file_format=FileFormat())
+    ok_file = {
+        "path": "data/x.csv",
+        "size": 1,
+        "content_b64": b64("a,b\n1,2\n"),
+        "truncated": False,
+    }
+    response = lambda files: {"status": "ok", "result": None, "files": files}  # noqa: E731
+    runner = RecordingRunner(
+        {"REF": response([ok_file]), "mine": response([ok_file]), "none": response([])}
+    )
+    assert grade(exercise(spec), "python", "mine", runner, ReferenceCache()).status == "passed"
+    result = grade(exercise(spec), "python", "none", runner, ReferenceCache())
+    assert result.status == "failed"
+    assert "ファイル" in result.feedback[0]
+    assert runner.calls[0][1].collect_files is True
+
+
+def test_custom_validator_strategy():
+    spec = GradingSpec(
+        "custom",
+        reference="REF",
+        artifacts=("df_train", "df_test"),
+        validator="train_test_split",
+        validator_params={"test_ratio": 0.5},
+    )
+    runner = RecordingRunner(
+        {
+            "REF": table(["id"], [[1], [2]]),
+            "df_train": table(["id"], [[1]]),
+            "df_test": table(["id"], [[2]]),
+        }
+    )
+    assert grade(exercise(spec), "python", "...", runner, ReferenceCache()).status == "passed"

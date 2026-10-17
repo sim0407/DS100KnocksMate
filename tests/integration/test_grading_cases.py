@@ -24,10 +24,23 @@ CACHE = ReferenceCache()
 
 def runner(language):
     if language == "python":
-        return lambda code, rows, timeout: run_python(
-            code, url=WORKER_URL, max_rows=rows, timeout_sec=timeout
+        return lambda code, rows, timeout, options: run_python(
+            code,
+            url=WORKER_URL,
+            max_rows=rows,
+            timeout_sec=timeout,
+            setup=options.setup,
+            collect_files=options.collect_files,
         )
-    return lambda code, rows, timeout: run_sql(code, dsn=DB_DSN, max_rows=rows, timeout_sec=timeout)
+    return lambda code, rows, timeout, options: run_sql(
+        code,
+        dsn=DB_DSN,
+        max_rows=rows,
+        timeout_sec=timeout,
+        writable=options.writable,
+        setup=options.setup,
+        stdin_query=options.stdin_query,
+    )
 
 
 def grade_code(exercise_id, language, code):
@@ -476,6 +489,174 @@ CASES = [
         "SELECT store_cd, ROUND(AVG(amount), 1) FROM receipt GROUP BY store_cd ORDER BY 2 DESC LIMIT 5",
         "failed",  # 丸めると値が変わる
     ),
+    # ---- Phase 3: 作成したデータ（artifact）
+    ("080", "python", "df_product_1 = df_product.dropna(how='any')", "passed"),
+    ("080", "python", "df_product_1 = df_product.copy()", "failed"),
+    ("080", "python", "df_x = df_product.dropna()", "failed"),  # 指定の変数名がない
+    (
+        "080",
+        "sql",
+        "CREATE TABLE product_1 AS SELECT * FROM product WHERE unit_price IS NOT NULL AND unit_cost IS NOT NULL;\n"
+        "SELECT COUNT(*) FROM product_1;",
+        "passed",
+    ),
+    ("080", "sql", "CREATE TABLE product_1 AS SELECT * FROM product;", "failed"),
+    (
+        "080",
+        "sql",
+        "SELECT * FROM product WHERE unit_price IS NOT NULL",
+        "failed",
+    ),  # テーブルを作っていない
+    (
+        "043",
+        "python",
+        'df = df_receipt.merge(df_customer, on="customer_id")\n'
+        'df["era"] = df["age"] // 10 * 10\n'
+        'df_sales_summary = df.pivot_table(index="era", columns="gender_cd", values="amount", aggfunc="sum", fill_value=0)'
+        '[["1", "0", "9"]].reset_index()',
+        "passed",  # 女性・男性・不明の順、欠損は0
+    ),
+    (
+        "043",
+        "python",
+        'df = df_receipt.merge(df_customer, on="customer_id")\n'
+        'df["era"] = df["age"] // 10 * 10\n'
+        'df_sales_summary = df.pivot_table(index="era", columns="gender_cd", values="amount", aggfunc="mean").reset_index()',
+        "failed",  # 合計ではなく平均
+    ),
+    (
+        "044",
+        "python",
+        'df_sales_summary.melt(id_vars="era").replace({"male": "00", "female": "01", "unknown": "99"})',
+        "passed",
+    ),
+    ("044", "python", 'df_sales_summary.melt(id_vars="era")', "failed"),  # コード値に変換していない
+    # ---- 前提データ・書き込み可能モード
+    (
+        "086",
+        "sql",
+        "SELECT c.customer_id, c.address, s.address,\n"
+        "  6371 * ACOS(SIN(RADIANS(c.m_latitude)) * SIN(RADIANS(s.latitude)) + COS(RADIANS(c.m_latitude)) * COS(RADIANS(s.latitude)) * COS(RADIANS(c.m_longitude - s.longitude)))\n"
+        "FROM customer_1 c JOIN store s ON c.application_store_cd = s.store_cd LIMIT 10",
+        "passed",
+    ),
+    # ---- ファイル出力
+    ("094", "python", 'df_product_full.to_csv("./data/out.csv", index=False)', "passed"),
+    (
+        "094",
+        "python",
+        'df_product_full.to_csv("../data/out.csv", index=False, encoding="utf_8_sig")',
+        "passed",
+    ),
+    ("094", "python", 'df_product_full.to_csv("data/out.csv")', "failed"),  # インデックスを出力
+    (
+        "094",
+        "python",
+        'df_product_full.to_csv("data/out.csv", index=False, encoding="cp932")',
+        "failed",
+    ),
+    ("094", "python", 'df_product_full.to_csv("out.csv", index=False)', "failed"),  # 出力先が違う
+    ("094", "sql", "COPY product_full TO STDOUT WITH (FORMAT csv, HEADER true)", "passed"),
+    ("094", "sql", "COPY product_full TO STDOUT WITH CSV", "failed"),  # ヘッダなし
+    (
+        "095",
+        "python",
+        'df_product_full.to_csv("data/out.csv", index=False, encoding="shift_jis", errors="replace")',
+        "passed",
+    ),
+    ("095", "python", 'df_product_full.to_csv("data/out.csv", index=False)', "failed"),  # UTF-8
+    (
+        "096",
+        "python",
+        'df_product_full.to_csv("data/out.csv", index=False, header=False)',
+        "passed",
+    ),
+    ("099", "python", 'df_product_full.to_csv("data/out.tsv", index=False, sep="\\t")', "passed"),
+    (
+        "099",
+        "python",
+        'df_product_full.to_csv("data/out.tsv", index=False)',
+        "failed",
+    ),  # カンマ区切り
+    # ---- ファイル読み込み
+    (
+        "097",
+        "python",
+        'pd.read_csv("../data/P_df_product_full_UTF-8_header.csv", dtype={"category_major_cd": str, "category_medium_cd": str, "category_small_cd": str}).head(3)',
+        "passed",
+    ),
+    (
+        "097",
+        "python",
+        'pd.read_csv("data/P_df_product_full_UTF-8_header.csv").head(3)',
+        "failed",
+    ),  # ゼロ埋めが消える
+    (
+        "097",
+        "python",
+        "df_product_full.head(3)",
+        "error",
+    ),  # 用意済みのファイルを読む問題（変数は消してある）
+    (
+        "097",
+        "sql",
+        "CREATE TABLE product_full (product_cd VARCHAR(10), category_major_cd VARCHAR(2), category_major_name VARCHAR(20),\n"
+        "  category_medium_cd VARCHAR(4), category_medium_name VARCHAR(20), category_small_cd VARCHAR(6),\n"
+        "  category_small_name VARCHAR(20), unit_price INTEGER, unit_cost INTEGER);\n"
+        "COPY product_full FROM STDIN WITH CSV HEADER;\n"
+        "SELECT * FROM product_full LIMIT 3;",
+        "passed",
+    ),
+    (
+        "098",
+        "python",
+        'df = pd.read_csv("data/P_df_product_full_UTF-8_noh.csv", header=None, dtype=str)\n'
+        "df[[4, 5]] = df[[4, 5]].astype(float)\n"
+        "df.head(3)",
+        "passed",
+    ),
+    # ---- 性質による採点（乱数）
+    (
+        "089",
+        "python",
+        'ids = df_receipt.groupby("customer_id").amount.sum().loc[lambda s: s > 0].index\n'
+        "df_all = df_customer[df_customer.customer_id.isin(ids)]\n"
+        "df_train, df_test = train_test_split(df_all, test_size=0.2, random_state=0)",
+        "passed",
+    ),
+    (
+        "089",
+        "python",
+        'ids = df_receipt.groupby("customer_id").amount.sum().loc[lambda s: s > 0].index\n'
+        "df_all = df_customer[df_customer.customer_id.isin(ids)]\n"
+        "df_train, df_test = train_test_split(df_all, test_size=0.5, random_state=0)",
+        "failed",
+    ),
+    (
+        "091",
+        "python",
+        "buy = df_customer.customer_id.isin(df_receipt.customer_id)\n"
+        "df_down_sampling = pd.concat([df_customer[buy], df_customer[~buy].sample(int(buy.sum()), random_state=1)])",
+        "passed",
+    ),
+    (
+        "091",
+        "python",
+        "buy = df_customer.customer_id.isin(df_receipt.customer_id)\n"
+        "df_down_sampling = pd.concat([df_customer[buy].sample(100), df_customer[~buy].sample(100)])",
+        "failed",  # 少ない方を全件残していない
+    ),
+    # ---- その他
+    ("032", "python", 'df_receipt["amount"].quantile([0.25, 0.5, 0.75, 1.0]).values', "passed"),
+    ("032", "python", 'df_receipt["amount"].quantile([0.25, 0.5, 0.75])', "failed"),
+    (
+        "077",
+        "python",
+        'df = df_receipt.groupby("customer_id", as_index=False).amount.sum()\n'
+        "z = np.log10(df.amount)\n"
+        "df[((z - z.mean()) / z.std()).abs() > 3].head(10)",
+        "passed",  # 常用対数・+0.5なし・不偏標準偏差
+    ),
 ]
 
 
@@ -501,16 +682,53 @@ NOT_STANDALONE_ANSWERS = {
         "python",
         1,
     ): "参考コード（全カテゴリの列を含む横持ち。画面の採点基準で4列構成を求めている）",
+    ("071", "python", 0): "上流の解答は pandas 3 で動かない（Series[0] の位置指定）",
+    ("072", "python", 0): "上流の解答は pandas 3 で動かない（Series[0] の位置指定）",
+    ("073", "python", 0): "上流の解答は pandas 3 で動かない（Series.view の削除）",
+    ("083", "python", 0): "上流の解答は pandas 3 で動かない（Series[0] の位置指定）",
+    ("084", "python", 0): "上流の解答は pandas 3 で動かない（Series[0] の位置指定）",
+    ("084", "python", 1): "確認用コード（前のセルの変数を表示するだけ）",
+    ("086", "python", 0): "上流の解答は pandas 3 で動かない（Series[0] の位置指定）",
+    ("090", "python", 1): "確認用コード（前のセルの変数を表示するだけ）",
+    ("090", "python", 2): "確認用コード（前のセルの変数を表示するだけ）",
+    ("090", "python", 3): "コード例2（前のセルで作った変数を使う）",
+    ("090", "python", 4): "確認用コード（前のセルの変数を表示するだけ）",
+    ("090", "python", 5): "確認用コード（前のセルの変数を表示するだけ）",
+    ("092", "python", 1): "確認用コード（前のセルの変数を表示するだけ）",
+    ("092", "python", 2): "確認用コード（前のセルの変数を表示するだけ）",
+}
+
+# SQL でテーブルを作る問題は、上流のセルが「作成→表示」の順に実行する手順になっているため、
+# セルをつなげた1つのスクリプトとして試す。次のものは理由つきで対象外。
+SQL_SCRIPT_EXCLUDED = {
+    "092": "上流の解答は customer_std から address 列を落としている（正規化として誤り。本アプリは全項目を残す形を正とする）",
+    **{
+        pid: "上流の解答は DB サーバー上のファイルに入出力する（本アプリは安全のため COPY ... TO STDOUT / FROM STDIN を使う）"
+        for pid in ("094", "095", "096", "097", "098", "099", "100")
+    },
 }
 MODEL_ANSWERS = [
     (eid, lang, i, code)
     for eid, lang in AUTO_GRADED
+    if not (lang == "sql" and get_exercise(eid).grading[lang].writable)
     for i, code in enumerate(load_answers()[eid][lang])
     if (eid, lang, i) not in NOT_STANDALONE_ANSWERS
+]
+SQL_SCRIPTS = [
+    (eid, ";\n".join(c.rstrip().rstrip(";") for c in load_answers()[eid]["sql"]))
+    for eid, lang in AUTO_GRADED
+    if lang == "sql" and get_exercise(eid).grading[lang].writable and eid not in SQL_SCRIPT_EXCLUDED
 ]
 
 
 @pytest.mark.parametrize(("exercise_id", "language", "index", "code"), MODEL_ANSWERS)
 def test_upstream_model_answers_pass(exercise_id, language, index, code):
     result = grade_code(exercise_id, language, code)
+    assert result.status == "passed", result.feedback
+
+
+@pytest.mark.parametrize(("exercise_id", "script"), SQL_SCRIPTS)
+def test_upstream_sql_scripts_pass(exercise_id, script):
+    """テーブルを作る問題の上流SQL解答（全セルをつなげたもの）が正解になる。"""
+    result = grade_code(exercise_id, "sql", script)
     assert result.status == "passed", result.feedback

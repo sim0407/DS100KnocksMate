@@ -1,0 +1,42 @@
+# P-098 / S-098: 096で出力したCSV・ヘッダ無し・UTF-8のファイルを読み込み3件表示
+id = "098"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 3
+column_names = false
+note = "コード値（category_*_cd）のゼロ埋めが保たれるよう、型を指定して読み込んでください。列名は問いません（ファイルの列の順に並べてください）。"
+setup_note = "096 の模範解答で出力したファイル ./data/P_df_product_full_UTF-8_noh.csv（CSV・ヘッダ無し・UTF-8）を用意済みです（../data/P_df_product_full_UTF-8_noh.csv でも読めます）。"
+setup = '''
+df_product_full = pd.merge(
+    df_product,
+    df_category[["category_small_cd", "category_major_name", "category_medium_name", "category_small_name"]],
+    how="inner",
+    on="category_small_cd",
+)
+df_product_full.to_csv("data/P_df_product_full_UTF-8_noh.csv", header=False, encoding="UTF-8", index=False)
+del df_product_full
+'''
+reference = 'pd.read_csv("data/P_df_product_full_UTF-8_noh.csv", dtype={1: str, 2: str, 3: str}, encoding="UTF-8", header=None)'
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 3
+writable = true
+note = "このアプリでは安全のため、DBサーバー上のファイルは読めません。テーブルを作成したあと COPY product_full FROM STDIN WITH ... と書くと、096 で出力したファイル（CSV・ヘッダ無し・UTF-8、模範解答）の内容が読み込まれます。"
+setup_note = "096 の模範解答の出力（CSV・ヘッダ無し・UTF-8）を、COPY ... FROM STDIN で読み込めるよう用意済みです。"
+setup = '''
+CREATE TABLE product_full_src AS (
+    SELECT
+        p.product_cd, p.category_major_cd, c.category_major_name, p.category_medium_cd, c.category_medium_name,
+        p.category_small_cd, c.category_small_name, p.unit_price, p.unit_cost
+    FROM product p JOIN category c USING (category_small_cd)
+)
+'''
+stdin_query = '''
+COPY product_full_src TO STDOUT WITH CSV ENCODING 'UTF-8'
+'''
+reference = 'SELECT * FROM product_full_src'

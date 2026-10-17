@@ -1,0 +1,34 @@
+# P-092 / S-092: 性別を第三正規形に正規化（作成した2つのデータを採点）
+id = "092"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "unordered"
+artifacts = [
+    'df_customer_std',
+    'df_gender_std',
+]
+note = "性別を除いた顧客データを変数 df_customer_std、性別コードと性別の対応表を変数 df_gender_std に入れてください。"
+reference = '''
+df_gender_std = df_customer[["gender_cd", "gender"]].drop_duplicates()
+df_customer_std = df_customer.drop(columns="gender")
+'''
+
+[sql]
+strategy = "table"
+rows = "unordered"
+writable = true
+artifacts = [
+    'customer_std',
+    'gender_std',
+]
+note = "性別を除いた顧客データをテーブル customer_std、性別コードと性別の対応表をテーブル gender_std にしてください（顧客データの他の項目は落とさないこと）。"
+reference = '''
+CREATE TABLE customer_std AS (
+    SELECT customer_id, customer_name, gender_cd, birth_day, age, postal_cd, address,
+        application_store_cd, application_date, status_cd
+    FROM customer
+);
+CREATE TABLE gender_std AS (SELECT DISTINCT gender_cd, gender FROM customer)
+'''

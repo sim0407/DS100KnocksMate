@@ -1,0 +1,67 @@
+# P-087 / S-087: 名前と郵便番号で名寄せした顧客データ（作成したデータを採点、088 で使用）
+id = "087"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "unordered"
+artifacts = [
+    'df_customer_u',
+]
+note = "名寄顧客データを変数 df_customer_u に入れてください（088 で使います）。顧客データの全項目（売上金額合計の列 sum_amount を末尾に残しても可）で作成してください。件数の表示は採点しません。"
+reference = '''
+df_receipt_tmp = df_receipt.groupby("customer_id").agg(sum_amount=("amount", "sum")).reset_index()
+df_customer_u = pd.merge(df_customer, df_receipt_tmp, how="left", on="customer_id")
+df_customer_u["sum_amount"] = df_customer_u["sum_amount"].fillna(0)
+df_customer_u = df_customer_u.sort_values(["sum_amount", "customer_id"], ascending=[False, True])
+df_customer_u = df_customer_u.drop_duplicates(subset=["customer_name", "postal_cd"], keep="first")
+df_customer_u = df_customer_u[list(df_customer.columns)]
+'''
+alternatives = [
+    '''
+df_receipt_tmp = df_receipt.groupby("customer_id").agg(sum_amount=("amount", "sum")).reset_index()
+df_customer_u = pd.merge(df_customer, df_receipt_tmp, how="left", on="customer_id")
+df_customer_u["sum_amount"] = df_customer_u["sum_amount"].fillna(0)
+df_customer_u = df_customer_u.sort_values(["sum_amount", "customer_id"], ascending=[False, True])
+df_customer_u = df_customer_u.drop_duplicates(subset=["customer_name", "postal_cd"], keep="first")
+''',
+]
+
+[sql]
+strategy = "table"
+rows = "unordered"
+writable = true
+artifacts = [
+    'customer_u',
+]
+note = "名寄顧客データをテーブル customer_u にしてください（088 で使います。実行後に取り消されます）。顧客データの全項目（売上金額合計 sum_amount を末尾に残しても可）で作成してください。件数の表示は採点しません。"
+reference = '''
+CREATE TABLE customer_u AS (
+    WITH sales_amount AS (
+        SELECT c.customer_id, c.customer_name, c.postal_cd, COALESCE(SUM(r.amount), 0) AS sum_amount
+        FROM customer c LEFT JOIN receipt r ON c.customer_id = r.customer_id
+        GROUP BY c.customer_id, c.customer_name, c.postal_cd
+    ),
+    sales_ranking AS (
+        SELECT *, ROW_NUMBER() OVER (PARTITION BY customer_name, postal_cd ORDER BY sum_amount DESC, customer_id) AS ranking
+        FROM sales_amount
+    )
+    SELECT c.* FROM customer c JOIN sales_ranking r ON c.customer_id = r.customer_id AND r.ranking = 1
+)
+'''
+alternatives = [
+    '''
+CREATE TABLE customer_u AS (
+    WITH sales_amount AS (
+        SELECT c.customer_id, c.customer_name, c.postal_cd, COALESCE(SUM(r.amount), 0) AS sum_amount
+        FROM customer c LEFT JOIN receipt r ON c.customer_id = r.customer_id
+        GROUP BY c.customer_id, c.customer_name, c.postal_cd
+    ),
+    sales_ranking AS (
+        SELECT *, ROW_NUMBER() OVER (PARTITION BY customer_name, postal_cd ORDER BY sum_amount DESC, customer_id) AS ranking
+        FROM sales_amount
+    )
+    SELECT c.*, r.sum_amount FROM customer c JOIN sales_ranking r ON c.customer_id = r.customer_id AND r.ranking = 1
+)
+''',
+]

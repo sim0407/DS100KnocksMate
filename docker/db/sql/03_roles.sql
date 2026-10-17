@@ -10,6 +10,8 @@ CREATE ROLE knocks_learner
 -- PUBLIC が既定で持つ CONNECT / TEMPORARY を外し、必要な権限だけを付与
 REVOKE ALL ON DATABASE dsdojo_db FROM PUBLIC;
 GRANT CONNECT ON DATABASE dsdojo_db TO knocks_learner;
+-- 一時テーブルのみ作成可（テーブルを作る問題用。アプリは常に ROLLBACK し、教材テーブルは SELECT のみ）
+GRANT TEMPORARY ON DATABASE dsdojo_db TO knocks_learner;
 
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
 GRANT USAGE ON SCHEMA public TO knocks_learner;

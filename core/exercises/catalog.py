@@ -17,13 +17,14 @@ from pathlib import Path
 from typing import Any, Literal
 
 from core.grading.compare import SortKey, TableSpec
+from core.grading.files import FileFormat
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CATALOG_DIR = PROJECT_ROOT / "exercises" / "catalog"
 PROBLEMS_DIR = PROJECT_ROOT / "exercises" / "problems"
 
 LANGUAGES = ("python", "sql")
-Strategy = Literal["table", "scalar", "manual_review"]
+Strategy = Literal["table", "scalar", "file", "custom", "manual_review"]
 
 UNSUPPORTED_REASON = (
     "この問題の自動採点は未対応です（今後対応予定）。実行結果を見て自己確認してください。"
@@ -42,6 +43,15 @@ _SPEC_LANG_KEYS = {
     "column_names",
     "note",
     "alternatives",
+    "key_columns",
+    "setup",
+    "setup_note",
+    "writable",
+    "stdin_query",
+    "artifacts",
+    "file_format",
+    "validator",
+    "validator_params",
 }
 _ROW_MODES = ("unordered", "ordered", "sorted", "subset_n", "top_n")
 
@@ -58,6 +68,16 @@ class GradingSpec:
     note: str = ""  # 採点基準の補足（例: 列名は問いません）。学習者に表示
     # 許容する別の参照（どれかに一致すれば正解）。不正解の理由は reference との比較から作る
     alternatives: tuple[str, ...] = ()
+    # 前の問題で作るデータ等を用意するコード（学習者・参照のどちらの実行でも先に実行）と、その説明
+    setup: str = ""
+    setup_note: str = ""
+    writable: bool = False  # SQL: テーブル作成など複数文を実行できる（必ずロールバック）
+    stdin_query: str = ""  # SQL: COPY ... FROM STDIN に流すデータを出力する COPY ... TO STDOUT
+    # 採点する変数名（Python）/ テーブル名（SQL）。空なら最後の式・最後の SELECT の結果
+    artifacts: tuple[str, ...] = ()
+    file_format: FileFormat | None = None  # strategy="file"
+    validator: str = ""  # strategy="custom"（core.grading.validators の名前）
+    validator_params: dict = field(default_factory=dict)
 
 
 UNSUPPORTED = GradingSpec("manual_review", reason=UNSUPPORTED_REASON)
@@ -78,10 +98,31 @@ class Exercise:
         return first if len(first) <= width else first[:width] + "…"
 
 
+def _common_options(lang: str, data: dict[str, Any]) -> dict[str, Any]:
+    """どの strategy でも使える実行オプション（前提データ・書き込み可能モード・採点対象）。"""
+    artifacts = data.get("artifacts", [])
+    if not isinstance(artifacts, list) or not all(
+        isinstance(a, str) and a.isidentifier() for a in artifacts
+    ):
+        raise ValueError(f"[{lang}] artifacts は変数名/テーブル名のリストで指定する")
+    for key in ("setup", "setup_note", "stdin_query"):
+        if not isinstance(data.get(key, ""), str):
+            raise ValueError(f"[{lang}] {key} は文字列で指定する")
+    return {
+        "setup": data.get("setup", "").strip(),
+        "setup_note": data.get("setup_note", "").strip(),
+        "writable": bool(data.get("writable", False)),
+        "stdin_query": data.get("stdin_query", "").strip(),
+        "artifacts": tuple(artifacts),
+    }
+
+
 def _parse_language(lang: str, data: dict[str, Any]) -> GradingSpec:
     unknown = set(data) - _SPEC_LANG_KEYS
     if unknown:
         raise ValueError(f"[{lang}] 不明なキー: {', '.join(sorted(unknown))}")
+    if lang != "sql" and (data.get("writable") or data.get("stdin_query")):
+        raise ValueError(f"[{lang}] writable / stdin_query は SQL のみ")
     strategy = data.get("strategy")
     note = str(data.get("note", "")).strip()
     if strategy == "manual_review":
@@ -89,7 +130,7 @@ def _parse_language(lang: str, data: dict[str, Any]) -> GradingSpec:
         if not reason:
             raise ValueError(f"[{lang}] manual_review には reason（学習者に表示する理由）が必要")
         return GradingSpec("manual_review", reason=reason, note=note)
-    if strategy not in ("table", "scalar"):
+    if strategy not in ("table", "scalar", "file", "custom"):
         raise ValueError(f"[{lang}] strategy の値が不正: {strategy!r}")
     reference = data.get("reference")
     if not isinstance(reference, str) or not reference.strip():
@@ -101,6 +142,30 @@ def _parse_language(lang: str, data: dict[str, Any]) -> GradingSpec:
     ):
         raise ValueError(f"[{lang}] alternatives はコード文字列のリストで指定する")
     alternatives = tuple(a.strip() for a in alternatives)
+    options = _common_options(lang, data)
+    if strategy == "file":
+        fmt = data.get("file_format")
+        if not isinstance(fmt, dict) or set(fmt) - {"delimiter", "header", "encoding"}:
+            raise ValueError(f"[{lang}] file_format は delimiter / header / encoding で指定する")
+        return GradingSpec(
+            "file", reference=reference.strip(), note=note, file_format=FileFormat(**fmt), **options
+        )
+    if strategy == "custom":
+        from core.grading.validators import VALIDATOR_ROLES
+
+        validator = data.get("validator", "")
+        if validator not in VALIDATOR_ROLES:
+            raise ValueError(f"[{lang}] validator が不明: {validator!r}")
+        if len(options["artifacts"]) != len(VALIDATOR_ROLES[validator]):
+            raise ValueError(f"[{lang}] validator {validator} の artifacts の数が違う")
+        return GradingSpec(
+            "custom",
+            reference=reference.strip(),
+            note=note,
+            validator=validator,
+            validator_params=dict(data.get("validator_params", {})),
+            **options,
+        )
     if strategy == "scalar":
         return GradingSpec(
             "scalar",
@@ -108,6 +173,7 @@ def _parse_language(lang: str, data: dict[str, Any]) -> GradingSpec:
             float_decimals=float_decimals,
             note=note,
             alternatives=alternatives,
+            **options,
         )
 
     rows = data.get("rows", "unordered")
@@ -122,6 +188,7 @@ def _parse_language(lang: str, data: dict[str, Any]) -> GradingSpec:
         n=data.get("n"),
         column_order=bool(data.get("column_order", True)),
         column_names=bool(data.get("column_names", True)),
+        key_columns=data.get("key_columns"),
         float_decimals=float_decimals,
     )
     return GradingSpec(
@@ -131,6 +198,7 @@ def _parse_language(lang: str, data: dict[str, Any]) -> GradingSpec:
         float_decimals=float_decimals,
         note=note,
         alternatives=alternatives,
+        **options,
     )
 
 

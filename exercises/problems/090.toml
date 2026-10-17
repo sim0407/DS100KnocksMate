@@ -1,0 +1,61 @@
+# P-090 / S-090: 月次売上から学習12ヶ月・テスト6ヶ月の時系列データを3セット作成（作成したデータを採点）
+id = "090"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "unordered"
+column_names = false
+artifacts = [
+    'df_train_1',
+    'df_test_1',
+    'df_train_2',
+    'df_test_2',
+    'df_train_3',
+    'df_test_3',
+]
+note = "6か月ずつずらした3セットを、変数 df_train_1〜df_train_3（各12か月）と df_test_1〜df_test_3（各6か月）に入れてください。各データは年月（YYYYMM の文字列）・売上金額合計の2列です（列名は問いません）。"
+reference = '''
+df_ts_amount = df_receipt[["sales_ymd", "amount"]].copy()
+df_ts_amount["sales_ym"] = df_ts_amount["sales_ymd"].astype("str").str[0:6]
+df_ts_amount = df_ts_amount.groupby("sales_ym").agg({"amount": "sum"}).reset_index()
+
+
+def split_data(df, train_size, test_size, slide_window, start_point):
+    train_start = start_point * slide_window
+    test_start = train_start + train_size
+    return df[train_start:test_start], df[test_start : test_start + test_size]
+
+
+df_train_1, df_test_1 = split_data(df_ts_amount, train_size=12, test_size=6, slide_window=6, start_point=0)
+df_train_2, df_test_2 = split_data(df_ts_amount, train_size=12, test_size=6, slide_window=6, start_point=1)
+df_train_3, df_test_3 = split_data(df_ts_amount, train_size=12, test_size=6, slide_window=6, start_point=2)
+'''
+
+[sql]
+strategy = "table"
+rows = "unordered"
+column_names = false
+writable = true
+artifacts = [
+    'series_data_1',
+    'series_data_2',
+    'series_data_3',
+]
+note = "6か月ずつずらした3セットを、テーブル series_data_1〜series_data_3 にしてください。各テーブルは年月（YYYYMM の文字列）・売上金額合計・テスト用フラグ（学習0/テスト1）の3列で18か月分です（列名は問いません）。"
+reference = '''
+CREATE TEMP TABLE ts_amount AS (
+    SELECT SUBSTR(CAST(sales_ymd AS VARCHAR), 1, 6) AS sales_ym, SUM(amount) AS sum_amount,
+        ROW_NUMBER() OVER (ORDER BY SUBSTR(CAST(sales_ymd AS VARCHAR), 1, 6)) AS rn
+    FROM receipt GROUP BY sales_ym
+);
+CREATE TABLE series_data_1 AS (
+    SELECT sales_ym, sum_amount, CASE WHEN rn <= 12 THEN 0 ELSE 1 END AS test_flg FROM ts_amount WHERE rn BETWEEN 1 AND 18
+);
+CREATE TABLE series_data_2 AS (
+    SELECT sales_ym, sum_amount, CASE WHEN rn - 6 <= 12 THEN 0 ELSE 1 END AS test_flg FROM ts_amount WHERE rn - 6 BETWEEN 1 AND 18
+);
+CREATE TABLE series_data_3 AS (
+    SELECT sales_ym, sum_amount, CASE WHEN rn - 12 <= 12 THEN 0 ELSE 1 END AS test_flg FROM ts_amount WHERE rn - 12 BETWEEN 1 AND 18
+)
+'''

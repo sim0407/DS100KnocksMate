@@ -7,6 +7,7 @@
 子プロセスでの制限:
 - 実時間タイムアウト（親がプロセスグループごと SIGKILL）と、予備としてのCPU時間制限
 - 書き込みファイルサイズ制限（RLIMIT_FSIZE）、毎回新しい一時作業ディレクトリ
+  （カレントは work/、出力先 ./data と ../data は同じ data/ フォルダ。collect_files で回収）
 - 結果JSONのバイト数上限（超えたら kill）
 - OOM時に子が優先して kill されるよう oom_score_adj=1000
 - 標準入出力のfdは /dev/null へ（サーバのログやプロトコルを汚さない）
@@ -15,6 +16,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import math
 import os
@@ -36,6 +38,8 @@ class Limits:
     max_file_bytes: int = 10 * 1024 * 1024
     max_rows: int = 200
     max_stdout_chars: int = 20000
+    max_collected_files: int = 10
+    max_collected_bytes: int = 16 * 1024 * 1024
 
 
 def _failure(status: str, message: str, elapsed_ms: int) -> dict:
@@ -67,18 +71,66 @@ def _harden_child(limits: Limits, workdir: str) -> None:
     resource.setrlimit(resource.RLIMIT_CPU, (cpu, cpu + 1))
     resource.setrlimit(resource.RLIMIT_FSIZE, (limits.max_file_bytes, limits.max_file_bytes))
     signal.signal(signal.SIGXFSZ, signal.SIG_IGN)  # 超過時はシグナル終了ではなく OSError に
-    os.chdir(workdir)
+    os.chdir(os.path.join(workdir, "work"))
 
 
-def _child_main(code: str, base_namespace: dict[str, Any], limits: Limits, wfd: int, workdir: str):
+def _prepare_workdir(workdir: str) -> None:
+    """workdir/work（カレント）と workdir/data を作り、work/data → ../data のリンクを張る。
+
+    問題文の出力先「./data」と、上流解答の「../data」のどちらでも同じフォルダになる。
+    """
+    os.makedirs(os.path.join(workdir, "work"))
+    os.makedirs(os.path.join(workdir, "data"))
+    os.symlink(os.path.join("..", "data"), os.path.join(workdir, "work", "data"))
+
+
+def _collect_files(workdir: str, limits: Limits) -> list[dict]:
+    """data フォルダに書かれたファイルを（件数・サイズ上限つきで）base64 で返す。"""
+    data_dir = os.path.join(workdir, "data")
+    files, total = [], 0
+    for dirpath, _, names in sorted(os.walk(data_dir)):
+        for name in sorted(names):
+            if len(files) >= limits.max_collected_files:
+                return files
+            path = os.path.join(dirpath, name)
+            if not os.path.isfile(path) or os.path.islink(path):
+                continue
+            size = os.path.getsize(path)
+            budget = max(limits.max_collected_bytes - total, 0)
+            with open(path, "rb") as f:
+                content = f.read(budget)
+            total += len(content)
+            files.append(
+                {
+                    "path": os.path.relpath(path, workdir).replace(os.sep, "/"),
+                    "size": size,
+                    "content_b64": base64.b64encode(content).decode("ascii"),
+                    "truncated": len(content) < size,
+                }
+            )
+    return files
+
+
+def _child_main(
+    code: str,
+    base_namespace: dict[str, Any],
+    limits: Limits,
+    wfd: int,
+    workdir: str,
+    setup: str,
+    collect_files: bool,
+):
     try:
         _harden_child(limits, workdir)
         result = execute(
             code,
             dict(base_namespace),
+            setup=setup,
             max_rows=limits.max_rows,
             max_stdout_chars=limits.max_stdout_chars,
         )
+        if collect_files:
+            result["files"] = _collect_files(workdir, limits)
         data = json.dumps(result, ensure_ascii=False).encode("utf-8")
         view = memoryview(data)
         while view:
@@ -96,14 +148,22 @@ def _kill_group(pid: int) -> None:
             pass
 
 
-def run_in_sandbox(code: str, base_namespace: dict[str, Any], *, limits: Limits) -> dict:
+def run_in_sandbox(
+    code: str,
+    base_namespace: dict[str, Any],
+    *,
+    limits: Limits,
+    setup: str = "",
+    collect_files: bool = False,
+) -> dict:
     started = time.monotonic()
     workdir = tempfile.mkdtemp(prefix="knocks-run-")
+    _prepare_workdir(workdir)
     rfd, wfd = os.pipe()
     pid = os.fork()
     if pid == 0:
         os.close(rfd)
-        _child_main(code, base_namespace, limits, wfd, workdir)
+        _child_main(code, base_namespace, limits, wfd, workdir, setup, collect_files)
     os.close(wfd)
 
     def elapsed_ms() -> int:

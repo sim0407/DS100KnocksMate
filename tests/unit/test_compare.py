@@ -383,3 +383,12 @@ def test_scalar_datetime_normalized():
     assert compare_scalars(
         ScalarResult("2020-02-03T00:00:00", "datetime"), ScalarResult("2020-02-03", "datetime")
     ).passed
+
+
+def test_key_columns_compares_only_leading_columns():
+    expected = table(["customer_id", "sum"], [["A", 10], ["B", 20]])
+    actual = table(["id", "total", "log", "z"], [["B", 20, 1.3, 0.5], ["A", 10, 1.0, -0.5]])
+    spec = TableSpec(column_names=False, key_columns=2)
+    assert compare_tables(expected, actual, spec).passed
+    short = table(["id"], [["A"], ["B"]])
+    assert not compare_tables(expected, short, spec).passed

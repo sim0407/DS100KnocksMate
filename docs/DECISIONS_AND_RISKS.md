@@ -86,6 +86,15 @@
 - **採点対象の拡大（2026-10-18）**: 62問/言語を自動採点。追加した仕組み: (1) `alternatives`（許容する別の参照。まず reference と比較し、不一致のときだけ順に試す。不正解の理由は reference との比較から作る）、(2) 日時の正規化（タイムゾーン付きはUTCへ、深夜0時は日付へ）、(3) Series の名前なし index が整数以外（列名などのラベル）なら列 `index` として残す、(4) 参照結果キャッシュを LRU（既定4件）に。実測で10万行級の参照を続けて採点してもアプリのメモリは約250MB。
 - **application_date の型**: 上流CSV分岐では整数になるが、問題文と上流の主環境（DB）に合わせて文字列で読む（`worker/datasets.py`）。
 - **上流解答セルの扱い**: 単独では完全な解答にならないセル（055の確認用・前セル依存・題意を満たさない参考、069の横持ち参考例）は「模範解答が正解になる」テストの対象外とし、理由を `tests/integration/test_grading_cases.py` に記載。
+- **Phase 3（2026-10-18）残り29問の対応**: 追加した仕組み
+  - `setup` / `setup_note`: 前の問題のデータを模範解答で用意（Python はワーカーで学習者コードの前に実行、出力は捨てる、失敗は SetupError。SQL は同じトランザクションで先に実行）
+  - `artifacts`: 作成した変数/テーブルを採点（コード末尾に名前 / `SELECT * FROM 名前` を付加。見つからない場合は案内メッセージ）
+  - SQL 書き込み可能モード（`writable`）: `sqlparse` で文に分割して順に実行、`search_path = pg_temp, public` で CREATE TABLE は一時スキーマへ、SELECT はカーソル経由、最後に ROLLBACK。学習者ロールに TEMPORARY 権限を追加（教材テーブルは SELECT のみのまま）。`COPY ... TO STDOUT` は files として回収、`COPY ... FROM STDIN` には `stdin_query` の出力を流す
+  - Python の作業フォルダ: カレントは work/、`./data` と `../data` は同じ data/（上流解答の `../data` パスもそのまま動く）。`collect_files` で回収
+  - `strategy = "file"`（`core/grading/files.py`）、`strategy = "custom"`（`core/grading/validators.py`: train_test_split, undersampling）、`key_columns`（先頭N列のみ比較）、NumPy 配列を表として扱う
+- **依存の追加**: `sqlparse==0.6.0`（BSD、app グループ）
+- **上流解答をテスト対象外にしたもの（理由は tests 内に記載）**: pandas 3 非互換（071〜073, 083, 084, 086 の Python）、確認用/前セル依存のセル、092 SQL の address 欠落（上流の誤り）、094〜100 SQL のサーバー上ファイル入出力
+- **リスク（書き込み可能モード）**: 一時テーブルは statement_timeout（15秒）内であれば大きく作れるため、DBコンテナのディスクを一時的に使う。ローカル単一利用のため許容し、ROLLBACK/セッション終了で削除される
 - **pyarrow**: 当面入れない（pandas 3 の文字列型はPython実装で動作）。性能問題が出たら再検討。
 - **自作部分のライセンス**: MITを第一候補（Phase 4で最終確認）。名称は仮称のまま（リポジトリ名 `DS100KnocksMate` / 文書上の「100 Knocks Trainer」の統一はPhase 4）。
 

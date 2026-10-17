@@ -1,0 +1,36 @@
+# P-095 / S-095: 093の商品データをCSV・ヘッダ有り・CP932でファイル出力（出力ファイルを採点）
+id = "095"
+status = "verified"
+
+[python]
+strategy = "file"
+file_format = { delimiter = ",", header = true, encoding = "cp932" }
+note = "出力先は ./data（../data でも同じ場所）です。ファイル名は自由です。インデックスは出力しないでください。"
+setup_note = "093 のカテゴリ名付き商品データ df_product_full を用意済みです。"
+setup = '''
+df_product_full = pd.merge(
+    df_product,
+    df_category[["category_small_cd", "category_major_name", "category_medium_name", "category_small_name"]],
+    how="inner",
+    on="category_small_cd",
+)
+'''
+reference = 'df_product_full.to_csv("data/P_df_product_full_CP932_header.csv", encoding="CP932", index=False)'
+
+[sql]
+strategy = "file"
+writable = true
+file_format = { delimiter = ",", header = true, encoding = "cp932" }
+note = "このアプリでは安全のため、DBサーバー上のファイル（/tmp/data など）には書き込めません。COPY product_full TO STDOUT WITH ... のように STDOUT へ出力してください（出力内容を採点します）。"
+setup_note = "093 のカテゴリ名付き商品データ product_full テーブルを用意済みです。"
+setup = '''
+CREATE TABLE product_full AS (
+    SELECT
+        p.product_cd, p.category_major_cd, c.category_major_name, p.category_medium_cd, c.category_medium_name,
+        p.category_small_cd, c.category_small_name, p.unit_price, p.unit_cost
+    FROM product p JOIN category c USING (category_small_cd)
+)
+'''
+reference = '''
+COPY product_full TO STDOUT WITH CSV HEADER ENCODING 'SJIS'
+'''

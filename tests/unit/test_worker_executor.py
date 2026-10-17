@@ -101,3 +101,20 @@ def test_serialization_failure_is_error_not_crash():
 
 def test_elapsed_ms_reported():
     assert run("1")["elapsed_ms"] >= 0
+
+
+def test_setup_runs_before_code_in_same_namespace():
+    r = run("df_sales_summary * 2", setup="df_sales_summary = 21\nprint('hidden')")
+    assert r["result"]["value"] == 42
+    assert r["stdout"] == ""  # 準備コードの出力は表示しない
+
+
+def test_setup_failure_is_reported_separately():
+    r = run("1", setup="raise ValueError('x')")
+    assert r["status"] == "error"
+    assert r["error"]["type"] == "SetupError"
+
+
+def test_error_line_numbers_are_not_shifted_by_setup():
+    r = run("a = 1\n1 / 0", setup="x = 1\ny = 2\nz = 3")
+    assert r["error"]["lineno"] == 2

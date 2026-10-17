@@ -1,0 +1,72 @@
+# P-044 / S-044: 043の売上サマリを縦持ちに変換（043の結果を用意して実行）
+id = "044"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "unordered"
+column_names = false
+note = "列名は問いません。年代・性別コード（'00'/'01'/'99'）・売上金額の3列で出力してください。売上がない組み合わせ（欠損）の行は含めても除いても正解とします。"
+setup_note = "043 の売上サマリデータ df_sales_summary（列: era, male, female, unknown）を用意済みです。"
+setup = '''
+df_tmp = pd.merge(df_receipt, df_customer, how="inner", on="customer_id")
+df_tmp["era"] = np.floor(df_tmp["age"] / 10).astype(int) * 10
+df_sales_summary = pd.pivot_table(
+    df_tmp, index="era", columns="gender_cd", values="amount", aggfunc="sum"
+).reset_index()
+df_sales_summary.columns = ["era", "male", "female", "unknown"]
+'''
+reference = '''
+df_sales_summary.melt(id_vars="era", var_name="gender_cd", value_name="amount").replace(
+    {"gender_cd": {"male": "00", "female": "01", "unknown": "99"}}
+)
+'''
+alternatives = [
+    '''
+df_sales_summary.melt(id_vars="era", var_name="gender_cd", value_name="amount").replace(
+    {"gender_cd": {"male": "00", "female": "01", "unknown": "99"}}
+).dropna(subset=["amount"])
+''',
+]
+
+[sql]
+strategy = "table"
+rows = "unordered"
+column_names = false
+writable = true
+note = "列名は問いません。年代・性別コード（'00'/'01'/'99'）・売上金額の3列で出力してください。売上がない組み合わせ（NULL）の行は含めても除いても正解とします。"
+setup_note = "043 の売上サマリ sales_summary テーブル（列: era, male, female, unknown）を用意済みです。"
+setup = '''
+DROP TABLE IF EXISTS sales_summary;
+CREATE TABLE sales_summary AS
+    WITH gender_era_amount AS (
+        SELECT TRUNC(age / 10) * 10 AS era, c.gender_cd, SUM(r.amount) AS amount
+        FROM customer c JOIN receipt r ON c.customer_id = r.customer_id
+        GROUP BY era, c.gender_cd
+    )
+    SELECT
+        era,
+        SUM(CASE WHEN gender_cd = '0' THEN amount END) AS male,
+        SUM(CASE WHEN gender_cd = '1' THEN amount END) AS female,
+        SUM(CASE WHEN gender_cd = '9' THEN amount END) AS unknown
+    FROM gender_era_amount
+    GROUP BY era
+'''
+reference = '''
+SELECT era, '00' AS gender_cd, male AS amount FROM sales_summary
+UNION ALL
+SELECT era, '01' AS gender_cd, female AS amount FROM sales_summary
+UNION ALL
+SELECT era, '99' AS gender_cd, unknown AS amount FROM sales_summary
+'''
+alternatives = [
+    '''
+SELECT * FROM (
+    SELECT era, '00' AS gender_cd, male AS amount FROM sales_summary
+    UNION ALL
+    SELECT era, '01' AS gender_cd, female AS amount FROM sales_summary
+    UNION ALL
+    SELECT era, '99' AS gender_cd, unknown AS amount FROM sales_summary
+) t WHERE amount IS NOT NULL
+''',
+]

@@ -97,3 +97,15 @@ def test_bad_request_over_http(server_url):
     with pytest.raises(urllib.error.HTTPError) as exc:
         post(server_url, {"code": 123})
     assert exc.value.code == 400
+
+
+def test_parse_request_accepts_setup_and_collect_files():
+    code, limits, options = parse_request(
+        b'{"code": "1", "setup": "x = 1", "collect_files": true}', Limits(), with_options=True
+    )
+    assert options == {"setup": "x = 1", "collect_files": True}
+
+
+def test_parse_request_rejects_bad_setup():
+    with pytest.raises(BadRequest):
+        parse_request(b'{"code": "1", "setup": 3}', Limits())

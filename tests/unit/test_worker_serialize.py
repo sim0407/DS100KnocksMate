@@ -169,3 +169,16 @@ def test_series_with_default_range_index_drops_index():
 def test_filtered_series_with_integer_index_drops_index():
     s = pd.Series([1, 2, 3], name="v")
     assert roundtrip(s[s > 1])["columns"] == ["v"]
+
+
+def test_numpy_1d_array_becomes_table():
+    r = roundtrip(np.array([1.5, 2.5]))
+    assert r["type"] == "table"
+    assert r["columns"] == ["value"]
+    assert r["rows"] == [[1.5], [2.5]]
+
+
+def test_numpy_2d_array_becomes_table():
+    r = roundtrip(np.array([[1, 2], [3, 4]]))
+    assert r["columns"] == ["0", "1"]
+    assert r["rows"] == [[1, 2], [3, 4]]

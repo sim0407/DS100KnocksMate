@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import base64
 import os
 import sys
 from functools import partial
@@ -19,7 +20,7 @@ if _ROOT not in sys.path:
 import pandas as pd  # noqa: E402
 import streamlit as st  # noqa: E402
 
-from app.display import row_summary, to_dataframe  # noqa: E402
+from app.display import file_label, file_preview, row_summary, to_dataframe  # noqa: E402
 from app.editor import code_editor  # noqa: E402
 from core.grading.grader import GradeResult  # noqa: E402
 from core.service import DISPLAY_MAX_ROWS, TrainerService  # noqa: E402
@@ -44,6 +45,10 @@ HINTS = {
         "テーブル: `customer` `category` `product` `receipt` `store` `geocode`"
     ),
 }
+WRITABLE_HINT = (
+    "この問題では CREATE TABLE など複数の文を実行できます。作成したテーブルは実行後に自動で取り消され、"
+    "教材データは変わりません（教材のテーブル自体は変更できません）。"
+)
 PLACEHOLDERS = {"python": "ここにPythonコードを書きます", "sql": "SELECT ... FROM ..."}
 ATTRIBUTION = (
     "教材: 一般社団法人データサイエンティスト協会 スキル定義委員会「データサイエンス100本ノック"
@@ -136,8 +141,21 @@ def show_response(response: dict) -> None:
     if response.get("stderr"):
         with st.expander("警告・標準エラー出力"):
             st.code(response["stderr"], language="text")
+    show_files(response.get("files") or [])
     if "elapsed_ms" in response:
         st.caption(f"実行時間: {response['elapsed_ms']:,} ms")
+
+
+def show_files(files: list[dict]) -> None:
+    """出力されたファイル（Python の ./data、SQL の COPY ... TO STDOUT）の先頭を表示する。"""
+    for f in files:
+        content = base64.b64decode(f["content_b64"])
+        encoding, preview = file_preview(content)
+        st.markdown(
+            f"**出力ファイル**: `{file_label(f['path'])}`（{f['size']:,} バイト、文字コード: {encoding}）"
+        )
+        if preview:
+            st.code(preview, language="text")
 
 
 def show_result(result: dict | None) -> None:
@@ -258,12 +276,14 @@ def render_practice(service: TrainerService, exercise_id: str, language: str, or
         st.info(f"この問題は {', '.join(exercise.depends_on)} の結果を使います。")
     if spec.strategy == "manual_review":
         st.warning(spec.reason)
+    if spec.setup_note:
+        st.info(f"📦 用意済みのデータ: {spec.setup_note}")
     if spec.note:
         st.info(f"採点基準: {spec.note}")
 
     # ---- コード入力
     code, run_shortcut = code_input(service, exercise_id, language)
-    st.caption(HINTS[language])
+    st.caption(WRITABLE_HINT if spec.writable else HINTS[language])
 
     prev_id, next_id = service.neighbors(exercise_id, order)
     col_run, col_grade, col_prev, col_next, col_review = st.columns([1, 1, 1, 1, 2])

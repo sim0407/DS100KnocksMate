@@ -13,7 +13,7 @@ from pathlib import Path
 from core.execution.python_runner import run_python
 from core.execution.sql_runner import run_sql
 from core.exercises.catalog import PROJECT_ROOT, Exercise, load_exercises
-from core.grading.grader import GradeResult, ReferenceCache, Runner, grade
+from core.grading.grader import ExecOptions, GradeResult, ReferenceCache, Runner, grade, options_for
 from core.progress.repository import ExerciseStatus, ProgressRepository
 
 DISPLAY_MAX_ROWS = 200
@@ -41,11 +41,28 @@ class TrainerService:
         dsn = os.environ.get("KNOCKS_DB_DSN", DEFAULT_DB_DSN)
         progress_path = Path(os.environ.get("KNOCKS_PROGRESS_DB", DEFAULT_PROGRESS_DB))
 
-        def python_runner(code: str, max_rows: int, timeout_sec: float) -> dict:
-            return run_python(code, url=worker_url, max_rows=max_rows, timeout_sec=timeout_sec)
+        def python_runner(
+            code: str, max_rows: int, timeout_sec: float, options: ExecOptions
+        ) -> dict:
+            return run_python(
+                code,
+                url=worker_url,
+                max_rows=max_rows,
+                timeout_sec=timeout_sec,
+                setup=options.setup,
+                collect_files=options.collect_files,
+            )
 
-        def sql_runner(code: str, max_rows: int, timeout_sec: float) -> dict:
-            return run_sql(code, dsn=dsn, max_rows=max_rows, timeout_sec=timeout_sec)
+        def sql_runner(code: str, max_rows: int, timeout_sec: float, options: ExecOptions) -> dict:
+            return run_sql(
+                code,
+                dsn=dsn,
+                max_rows=max_rows,
+                timeout_sec=timeout_sec,
+                writable=options.writable,
+                setup=options.setup,
+                stdin_query=options.stdin_query,
+            )
 
         return cls(
             exercises=load_exercises(),
@@ -104,8 +121,14 @@ class TrainerService:
     # ------------------------------------------------------------ 実行・採点
 
     def run(self, exercise_id: str, language: str, code: str) -> dict:
-        """実行して結果を返す（採点・合格判定には影響しない）。"""
-        response = self.runners[language](code, DISPLAY_MAX_ROWS, RUN_TIMEOUT_SEC)
+        """実行して結果を返す（採点・合格判定には影響しない）。
+
+        前の問題のデータ（setup）やテーブル作成の可否（writable）は採点と同じ条件にする。
+        Python では出力先 data フォルダのファイルも返す（画面で確認できるように）。
+        """
+        spec = self.exercise(exercise_id).grading[language]
+        options = options_for(spec, collect_files=language == "python")
+        response = self.runners[language](code, DISPLAY_MAX_ROWS, RUN_TIMEOUT_SEC, options)
         self.progress.record_run(exercise_id, language, code, response.get("status", "error"))
         return response
 

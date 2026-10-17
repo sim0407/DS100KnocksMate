@@ -18,6 +18,7 @@ from typing import Any
 from worker.serialize import serialize_value
 
 USER_FILENAME = "<学習者コード>"
+SETUP_FILENAME = "<準備コード>"
 
 
 class CappedWriter(io.TextIOBase):
@@ -44,6 +45,10 @@ class CappedWriter(io.TextIOBase):
 
     def getvalue(self) -> str:
         return "".join(self.parts)
+
+
+class _SkipUserCode(Exception):
+    pass
 
 
 def _display(*objects: Any, **_: Any) -> None:
@@ -74,6 +79,7 @@ def execute(
     code: str,
     namespace: dict[str, Any],
     *,
+    setup: str = "",
     max_rows: int = 200,
     max_stdout_chars: int = 20000,
     max_text_chars: int = 20000,
@@ -85,7 +91,22 @@ def execute(
     linecache.cache[USER_FILENAME] = (len(code), None, code.splitlines(True), USER_FILENAME)
 
     status, result, error = "ok", None, None
+    if setup:
+        # 前の問題で作るデータ等を用意する（出力は表示しない）。失敗はアプリ側の問題として区別する
+        try:
+            with redirect_stdout(CappedWriter(0)), redirect_stderr(CappedWriter(0)):
+                exec(compile(setup, SETUP_FILENAME, "exec"), namespace)
+        except BaseException as exc:
+            status = "error"
+            error = _error(exc, user_only=False)
+            error["type"] = "SetupError"
+            error["message"] = (
+                f"前提データの準備に失敗しました（アプリ側の問題の可能性があります）: {exc!r}"
+            )
+            code = ""  # 学習者のコードは実行しない
     try:
+        if status == "error":
+            raise _SkipUserCode
         tree = ast.parse(code, filename=USER_FILENAME)
         last_expr = None
         if tree.body and isinstance(tree.body[-1], ast.Expr):
@@ -106,6 +127,8 @@ def execute(
                     error = _error(exc, user_only=False)
                     error["type"] = "ResultError"
                     error["message"] = f"結果の表示に失敗しました: {exc!r}"
+    except _SkipUserCode:
+        pass
     except SyntaxError as exc:
         status, error = "error", _error(exc)
     except BaseException as exc:  # SystemExit等も学習者のエラーとして返す

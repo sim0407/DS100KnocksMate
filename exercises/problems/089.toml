@@ -1,0 +1,29 @@
+# P-089 / S-089: 売上実績のある顧客を8:2にランダム分割（性質で採点）
+id = "089"
+status = "verified"
+
+[python]
+strategy = "custom"
+artifacts = [
+    'df_train',
+    'df_test',
+]
+validator = "train_test_split"
+validator_params = { test_ratio = 0.2 }
+note = "学習用データを変数 df_train、テスト用データを変数 df_test に入れてください（顧客データの全項目）。乱数を使うため、重なりがないこと・合わせると売上実績のある顧客全体になること・テスト用が約20%であることを確かめます。"
+reference = '''
+df_sales_customer = df_receipt.groupby("customer_id").agg({"amount": "sum"}).reset_index().query("amount > 0")
+pd.merge(df_customer, df_sales_customer["customer_id"], how="inner", on="customer_id")
+'''
+
+[sql]
+strategy = "custom"
+writable = true
+artifacts = [
+    'customer_train',
+    'customer_test',
+]
+validator = "train_test_split"
+validator_params = { test_ratio = 0.2 }
+note = "学習用データをテーブル customer_train、テスト用データを customer_test にしてください（顧客データの全項目）。乱数を使うため、重なりがないこと・合わせると売上実績のある顧客全体になること・テスト用が約20%であることを確かめます。"
+reference = 'SELECT c.* FROM customer c WHERE c.customer_id IN (SELECT customer_id FROM receipt GROUP BY customer_id HAVING SUM(amount) > 0)'

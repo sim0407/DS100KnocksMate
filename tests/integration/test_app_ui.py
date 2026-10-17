@@ -104,9 +104,9 @@ def test_next_and_unsupported_problem(progress_db):
     at = start()
     at.button(key="next").click().run()
     assert at.subheader[0].value == "P-002"
-    at.selectbox(key="exercise_id").set_value("100").run()
-    assert at.subheader[0].value == "P-100"
-    assert "未対応" in texts(at.warning)
+    at.selectbox(key="exercise_id").set_value("075").run()
+    assert at.subheader[0].value == "P-075"
+    assert "自動採点できません" in texts(at.warning)
 
 
 def test_draft_and_pass_survive_restart(progress_db):
@@ -144,7 +144,7 @@ def test_overview_page(progress_db):
     table = at.dataframe[0].value
     assert len(table) == 100
     assert table.iloc[0]["Python"] == "✅ 正解"
-    assert "採点未対応" in table.iloc[99]["SQL"]
+    assert "採点未対応" in table.iloc[74]["SQL"]  # 075 は乱数のため自動採点しない
     assert "1 / 100" in texts(at.metric)
 
 
@@ -176,3 +176,34 @@ def test_selection_survives_language_switch_and_label_change(progress_db):
     assert at.subheader[0].value == "S-008"
     at.radio(key="language").set_value("python").run()
     assert at.subheader[0].value == "P-008"
+
+
+def test_setup_note_and_file_output_preview(progress_db):
+    at = start()
+    at.selectbox(key="exercise_id").set_value("094").run()
+    assert "用意済みのデータ" in texts(at.info)
+    at.text_area(key="code::094::python").input(
+        'df_product_full.to_csv("data/out.csv", index=False)'
+    ).run()
+    at.button(key="run").click().run()
+    assert not at.exception
+    assert "出力ファイル" in texts(at.markdown)
+    assert "product_cd" in " ".join(str(c.value) for c in at.code)
+    at.button(key="grade").click().run()
+    assert "正解です" in texts(at.success)
+
+
+def test_sql_writable_problem(progress_db):
+    at = start()
+    at.radio(key="language").set_value("sql").run()
+    at.selectbox(key="exercise_id").set_value("080").run()
+    assert "CREATE TABLE" in " ".join(str(c.value) for c in at.caption)
+    code = (
+        "CREATE TABLE product_1 AS SELECT * FROM product "
+        "WHERE unit_price IS NOT NULL AND unit_cost IS NOT NULL;\nSELECT COUNT(*) FROM product_1;"
+    )
+    at.text_area(key="code::080::sql").input(code).run()
+    at.button(key="run").click().run()
+    assert len(at.dataframe[0].value) == 1
+    at.button(key="grade").click().run()
+    assert "正解です" in texts(at.success)

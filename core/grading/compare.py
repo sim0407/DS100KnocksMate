@@ -64,6 +64,8 @@ class TableSpec:
     column_order: bool = True
     # False: 列名を問わず位置で対応づける（問題文が列名を指定しない集計など）。列の数と順序は一致が必要
     column_names: bool = True
+    # 先頭の何列だけを比べるか（以降の列は自由）。None なら全列
+    key_columns: int | None = None
     float_decimals: int = 6
 
     def __post_init__(self) -> None:
@@ -191,6 +193,28 @@ def compare_tables(
             False,
             [f"結果が大きすぎるため採点できません（{actual.row_count}行）"],
             gradable=False,
+        )
+
+    if spec.key_columns is not None:
+        k = spec.key_columns
+        if len(actual.columns) < k:
+            return Comparison(
+                False,
+                [
+                    f"列の数が足りません（少なくとも先頭{k}列が必要 / 実際: {len(actual.columns)}列）"
+                ],
+            )
+        expected = replace(
+            expected,
+            columns=expected.columns[:k],
+            kinds=expected.kinds[:k],
+            rows=[r[:k] for r in expected.rows],
+        )
+        actual = replace(
+            actual,
+            columns=actual.columns[:k],
+            kinds=actual.kinds[:k],
+            rows=[r[:k] for r in actual.rows],
         )
 
     if not spec.column_names:

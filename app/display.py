@@ -33,3 +33,26 @@ def row_summary(result: dict, shown: int) -> str:
     if result.get("truncated"):
         return f"{total:,}行 × {cols}列（先頭{shown:,}行を表示）"
     return f"{total:,}行 × {cols}列"
+
+
+def file_preview(content: bytes, max_lines: int = 15) -> tuple[str, str]:
+    """(文字コードの推定, 先頭 max_lines 行)。UTF-8 → CP932 の順に試す。"""
+    candidates = (("utf-8", "UTF-8"), ("cp932", "CP932（Shift_JIS）"))
+    for encoding, label in candidates:
+        try:
+            text = content.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+        if encoding == "utf-8" and text.startswith("\ufeff"):
+            text, label = text[1:], "UTF-8（BOM付き）"
+        lines = text.splitlines()
+        if len(lines) > max_lines:
+            lines = [*lines[:max_lines], "…"]
+        return label, "\n".join(lines)
+    return "不明（UTF-8/CP932 として読めません）", ""
+
+
+def file_label(path: str) -> str:
+    if path.startswith("COPY_TO_STDOUT_"):
+        return f"COPY ... TO STDOUT の出力（{path.rsplit('_', 1)[1]}）"
+    return path

@@ -28,9 +28,25 @@ def _unavailable(message: str, started: float) -> dict:
     }
 
 
-def run_python(code: str, *, url: str, max_rows: int = 200, timeout_sec: float = 10.0) -> dict:
+def run_python(
+    code: str,
+    *,
+    url: str,
+    max_rows: int = 200,
+    timeout_sec: float = 10.0,
+    setup: str = "",
+    collect_files: bool = False,
+) -> dict:
+    """setup: 学習者コードの前に同じ名前空間で実行する準備コード（前の問題のデータ作成など）。
+    collect_files: 出力先 data フォルダのファイルを応答の files に含める。
+    """
     started = time.monotonic()
-    body = json.dumps({"code": code, "max_rows": max_rows, "timeout_sec": timeout_sec}).encode()
+    payload = {"code": code, "max_rows": max_rows, "timeout_sec": timeout_sec}
+    if setup:
+        payload["setup"] = setup
+    if collect_files:
+        payload["collect_files"] = True
+    body = json.dumps(payload).encode()
     request = urllib.request.Request(
         url.rstrip("/") + "/execute",
         data=body,

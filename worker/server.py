@@ -1,7 +1,8 @@
 """Pythonワーカーの HTTP サーバ（標準ライブラリのみ）。内部Dockerネットワーク専用で、ホストへは公開しない。
 
     GET  /health   -> {"status": "ok"}
-    POST /execute  {"code": str, "max_rows"?: int, "timeout_sec"?: float} -> 実行結果JSON
+    POST /execute  {"code": str, "max_rows"?: int, "timeout_sec"?: float,
+                    "setup"?: str, "collect_files"?: bool} -> 実行結果JSON
 
 起動時にライブラリと教材データを読み込み、実行ごとに worker.sandbox で fork して実行する。
 マルチスレッドのプロセスからの fork は子でデッドロックしうるため、サーバはシングルスレッド
@@ -54,7 +55,7 @@ class BadRequest(ValueError):
     pass
 
 
-def parse_request(body: bytes, defaults: Limits) -> tuple[str, Limits]:
+def parse_request(body: bytes, defaults: Limits, *, with_options: bool = False):
     try:
         payload = json.loads(body)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -82,13 +83,23 @@ def parse_request(body: bytes, defaults: Limits) -> tuple[str, Limits]:
     ):
         raise BadRequest(f"timeout_sec は 0〜{MAX_TIMEOUT_SEC:g} 秒")
 
-    return code, Limits(
+    setup = payload.get("setup", "")
+    if not isinstance(setup, str) or len(setup) > MAX_CODE_CHARS:
+        raise BadRequest("setup は文字列（上限あり）が必要です")
+    collect_files = payload.get("collect_files", False)
+    if not isinstance(collect_files, bool):
+        raise BadRequest("collect_files は真偽値が必要です")
+
+    limits = Limits(
         timeout_sec=float(timeout),
         max_output_bytes=defaults.max_output_bytes,
         max_file_bytes=defaults.max_file_bytes,
         max_rows=max_rows,
         max_stdout_chars=defaults.max_stdout_chars,
     )
+    if with_options:
+        return code, limits, {"setup": setup, "collect_files": collect_files}
+    return code, limits
 
 
 def make_server(
@@ -125,11 +136,13 @@ def make_server(
                 self._send(413, {"error": "リクエストが大きすぎます"})
                 return
             try:
-                code, limits = parse_request(self.rfile.read(length), defaults)
+                code, limits, options = parse_request(
+                    self.rfile.read(length), defaults, with_options=True
+                )
             except BadRequest as exc:
                 self._send(400, {"error": str(exc)})
                 return
-            result = run_in_sandbox(code, base_namespace, limits=limits)
+            result = run_in_sandbox(code, base_namespace, limits=limits, **options)
             self._send(200, result)
 
     return HTTPServer((host, port), Handler)

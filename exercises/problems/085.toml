@@ -1,0 +1,41 @@
+# P-085 / S-085: 郵便番号でジオコード（緯度経度の平均）を紐付けた顧客データを10件
+id = "085"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。顧客データの全項目に続けて、経度の平均・緯度の平均の2列を出力してください。作成したデータは変数 df_customer_1 に入れておくと 086 と同じ形で練習できます。"
+reference = '''
+df_geocode_1 = df_geocode.groupby("postal_cd").agg(m_longitude=("longitude", "mean"), m_latitude=("latitude", "mean")).reset_index()
+df_customer_1 = pd.merge(df_customer, df_geocode_1, how="inner", on="postal_cd")
+df_customer_1
+'''
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+writable = true
+note = "列名は問いません。顧客データの全項目と経度の平均・緯度の平均を出力してください（USING(postal_cd) で結合した列順、または顧客の全項目→経度→緯度の列順）。"
+reference = '''
+CREATE TABLE customer_1 AS (
+    WITH geocode_avg AS (
+        SELECT postal_cd, AVG(longitude) AS m_longitude, AVG(latitude) AS m_latitude FROM geocode GROUP BY postal_cd
+    )
+    SELECT * FROM customer c JOIN geocode_avg g USING (postal_cd)
+)
+;
+SELECT * FROM customer_1
+'''
+alternatives = [
+    '''
+WITH geocode_avg AS (
+    SELECT postal_cd, AVG(longitude) AS m_longitude, AVG(latitude) AS m_latitude FROM geocode GROUP BY postal_cd
+)
+SELECT c.*, g.m_longitude, g.m_latitude FROM customer c JOIN geocode_avg g ON c.postal_cd = g.postal_cd
+''',
+]

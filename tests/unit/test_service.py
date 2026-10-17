@@ -28,7 +28,7 @@ class FakeRunner:
     def __init__(self):
         self.calls = []
 
-    def __call__(self, code, max_rows, timeout_sec):
+    def __call__(self, code, max_rows, timeout_sec, options=None):
         self.calls.append((code, max_rows))
         if code == "boom":
             return {
@@ -97,9 +97,9 @@ def test_grade_error_records_error_execution_status(service):
 
 
 def test_grade_unsupported_problem_is_manual_review_and_not_passed(service):
-    result = service.grade("100", "python", "anything")
+    result = service.grade("075", "python", "anything")
     assert result.status == "manual_review"
-    assert service.progress.get_status("100", "python").state == "in_progress"
+    assert service.progress.get_status("075", "python").state == "in_progress"
 
 
 def test_progress_summary(service):
@@ -126,10 +126,10 @@ def test_overview_rows(service):
     assert rows["002"]["sql_state"] == "in_progress"
     assert rows["003"]["python_review"] is True
     assert rows["001"]["python_auto"] is True
-    assert rows["100"]["python_auto"] is False
+    assert rows["075"]["python_auto"] is False
     assert rows["001"]["title"].startswith("レシート明細データ")
 
 
 def test_auto_gradable_ids(service):
     ids = service.auto_gradable_ids("python")
-    assert "001" in ids and "100" not in ids and "020" not in ids
+    assert "001" in ids and "100" in ids and "075" not in ids and "020" not in ids

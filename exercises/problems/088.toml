@@ -1,0 +1,55 @@
+# P-088 / S-088: 名寄せ結果をもとに統合名寄IDを付与した顧客データ（087の結果を用意して実行）
+id = "088"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "unordered"
+column_names = false
+artifacts = [
+    'df_customer_n',
+]
+note = "作成したデータを変数 df_customer_n に入れてください。列は顧客データの全項目に続けて統合名寄IDの1列です（列名は問いません）。ID数の差の表示は採点しません。"
+setup_note = "087 の名寄顧客データ df_customer_u を用意済みです。"
+setup = '''
+df_receipt_tmp = df_receipt.groupby("customer_id").agg(sum_amount=("amount", "sum")).reset_index()
+df_customer_u = pd.merge(df_customer, df_receipt_tmp, how="left", on="customer_id")
+df_customer_u["sum_amount"] = df_customer_u["sum_amount"].fillna(0)
+df_customer_u = df_customer_u.sort_values(["sum_amount", "customer_id"], ascending=[False, True])
+df_customer_u = df_customer_u.drop_duplicates(subset=["customer_name", "postal_cd"], keep="first")
+'''
+reference = '''
+df_customer_n = pd.merge(df_customer, df_customer_u[["customer_name", "postal_cd", "customer_id"]], how="inner", on=["customer_name", "postal_cd"])
+df_customer_n = df_customer_n.rename(columns={"customer_id_x": "customer_id", "customer_id_y": "integration_id"})
+'''
+
+[sql]
+strategy = "table"
+rows = "unordered"
+column_names = false
+writable = true
+artifacts = [
+    'customer_n',
+]
+note = "作成したデータをテーブル customer_n にしてください。列は顧客データの全項目に続けて統合名寄IDの1列です（列名は問いません）。"
+setup_note = "087 の名寄顧客データ customer_u テーブルを用意済みです。"
+setup = '''
+CREATE TABLE customer_u AS (
+    WITH sales_amount AS (
+        SELECT c.customer_id, c.customer_name, c.postal_cd, COALESCE(SUM(r.amount), 0) AS sum_amount
+        FROM customer c LEFT JOIN receipt r ON c.customer_id = r.customer_id
+        GROUP BY c.customer_id, c.customer_name, c.postal_cd
+    ),
+    sales_ranking AS (
+        SELECT *, ROW_NUMBER() OVER (PARTITION BY customer_name, postal_cd ORDER BY sum_amount DESC, customer_id) AS ranking
+        FROM sales_amount
+    )
+    SELECT c.* FROM customer c JOIN sales_ranking r ON c.customer_id = r.customer_id AND r.ranking = 1
+)
+'''
+reference = '''
+CREATE TABLE customer_n AS (
+    SELECT c.*, u.customer_id AS integration_id
+    FROM customer c JOIN customer_u u ON c.customer_name = u.customer_name AND c.postal_cd = u.postal_cd
+)
+'''

@@ -18,7 +18,7 @@ import pytest
 
 from core.execution.python_runner import run_python
 from core.execution.sql_runner import run_sql
-from core.exercises.catalog import load_answers, load_exercises
+from core.exercises.catalog import get_exercise, load_answers, load_exercises
 
 WORKER_URL = os.environ.get("KNOCKS_WORKER_URL")
 DB_DSN = os.environ.get("KNOCKS_DB_DSN")
@@ -59,6 +59,8 @@ def notebook_python(outputs: list[dict]) -> tuple[str, object]:
     m = re.search(r"\[(\d+) rows x \d+ columns\]", text)
     if m:
         return "rows", int(m.group(1))
+    if text.startswith("array("):  # NumPy 配列の表示
+        return "rows", len(re.findall(r"-?\d+(?:\.\d+)?(?:e[+-]?\d+)?", text.split("dtype")[0]))
     lines = text.splitlines()
     if lines and lines[-1].startswith(("dtype:", "Name:")):  # Series の表示
         return "rows", len([line for line in lines if not line.startswith(("dtype:", "Name:"))])
@@ -81,6 +83,23 @@ def values_match(value, text: str) -> bool:
         return str(value) == text
 
 
+# 上流の解答がこのアプリの環境では同じ出力にならないもの（理由つき）
+CROSSCHECK_EXCLUDED = {
+    ("071", "python"): "上流の解答は pandas 3 で動かない（Series[0] の位置指定）",
+    ("072", "python"): "上流の解答は pandas 3 で動かない（Series[0] の位置指定）",
+    ("073", "python"): "上流の解答は pandas 3 で動かない（Series.view の削除）",
+    ("086", "python"): "上流の解答は pandas 3 で動かない（Series[0] の位置指定）",
+    ("084", "python"): "上流の解答は pandas 3 で動かない（Series[0] の位置指定）",
+    ("044", "python"): "pandas 3 の stack は欠損の行を残すため、上流（pandas 1.5）と行数が異なる",
+    **{
+        (
+            pid,
+            "sql",
+        ): "上流の解答は DB サーバー上のファイルから読み込む（本アプリでは COPY FROM STDIN）"
+        for pid in ("097", "098", "100")
+    },
+}
+
 CASES = [
     (e.id, lang)
     for e in load_exercises()
@@ -93,8 +112,17 @@ CASES = [
 def test_model_answer_matches_notebook_output(exercise_id, language):
     code = load_answers()[exercise_id][language][0]
     outputs = first_outputs(language)[exercise_id]
+    spec = get_exercise(exercise_id).grading[language]
+    if (
+        spec.artifacts
+        or spec.strategy in ("file", "custom")
+        or not any("data" in o or o.get("output_type") == "stream" for o in outputs)
+    ):
+        pytest.skip("作成したデータ・ファイル・性質で採点する問題（表示結果の照合は対象外）")
+    if (exercise_id, language) in CROSSCHECK_EXCLUDED:
+        pytest.skip(CROSSCHECK_EXCLUDED[(exercise_id, language)])
     if language == "python":
-        response = run_python(code, url=WORKER_URL, max_rows=1000)
+        response = run_python(code, url=WORKER_URL, max_rows=1000, setup=spec.setup)
         assert response["status"] == "ok", response["error"]
         kind, expected = notebook_python(outputs)
         result = response["result"]
@@ -103,6 +131,15 @@ def test_model_answer_matches_notebook_output(exercise_id, language):
         else:
             assert values_match(result["value"], expected)
     else:
-        response = run_sql(code, dsn=DB_DSN, max_rows=1000)
+        response = run_sql(
+            code,
+            dsn=DB_DSN,
+            max_rows=1000,
+            writable=spec.writable,
+            setup=spec.setup,
+            stdin_query=spec.stdin_query,
+        )
         assert response["status"] == "ok", response["error"]
+        if response["result"] is None:
+            pytest.skip("最初のセルはテーブル作成のみ（表示は次のセル）")
         assert response["result"]["row_count"] == notebook_sql_rows(outputs)

@@ -1,0 +1,138 @@
+# P-043 / S-043: 性別×年代の売上サマリ（クロス集計）。作成したデータを採点（044 で使用）
+id = "043"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "unordered"
+column_names = false
+artifacts = [
+    'df_sales_summary',
+]
+note = "作成した売上サマリデータを変数 df_sales_summary に入れてください（044 で使います）。列名は問いません。年代・女性・男性・不明の4列（男性・女性の順でも可）で作成してください。該当がない欄は空（欠損）でも0でも正解とします。"
+reference = '''
+df_tmp = pd.merge(df_receipt, df_customer, how="inner", on="customer_id")
+df_tmp["era"] = np.floor(df_tmp["age"] / 10).astype(int) * 10
+df_sales_summary = pd.pivot_table(
+    df_tmp, index="era", columns="gender_cd", values="amount", aggfunc="sum"
+).reset_index()
+df_sales_summary.columns = ["era", "male", "female", "unknown"]
+df_sales_summary = df_sales_summary[["era", "female", "male", "unknown"]]
+'''
+alternatives = [
+    '''
+df_tmp = pd.merge(df_receipt, df_customer, how="inner", on="customer_id")
+df_tmp["era"] = np.floor(df_tmp["age"] / 10).astype(int) * 10
+df_sales_summary = pd.pivot_table(
+    df_tmp, index="era", columns="gender_cd", values="amount", aggfunc="sum"
+).reset_index()
+df_sales_summary.columns = ["era", "male", "female", "unknown"]
+''',
+    '''
+df_tmp = pd.merge(df_receipt, df_customer, how="inner", on="customer_id")
+df_tmp["era"] = np.floor(df_tmp["age"] / 10).astype(int) * 10
+df_sales_summary = pd.pivot_table(
+    df_tmp, index="era", columns="gender_cd", values="amount", aggfunc="sum"
+).reset_index()
+df_sales_summary.columns = ["era", "male", "female", "unknown"]
+df_sales_summary = df_sales_summary.fillna(0)
+df_sales_summary = df_sales_summary[["era", "female", "male", "unknown"]]
+''',
+    '''
+df_tmp = pd.merge(df_receipt, df_customer, how="inner", on="customer_id")
+df_tmp["era"] = np.floor(df_tmp["age"] / 10).astype(int) * 10
+df_sales_summary = pd.pivot_table(
+    df_tmp, index="era", columns="gender_cd", values="amount", aggfunc="sum"
+).reset_index()
+df_sales_summary.columns = ["era", "male", "female", "unknown"]
+df_sales_summary = df_sales_summary.fillna(0)
+''',
+]
+
+[sql]
+strategy = "table"
+rows = "unordered"
+column_names = false
+writable = true
+artifacts = [
+    'sales_summary',
+]
+note = "作成した売上サマリデータをテーブル sales_summary にしてください（044 で使います。作成したテーブルは実行後に取り消されます）。列名は問いません。年代・女性・男性・不明の4列（男性・女性の順でも可）で作成してください。該当がない欄は空（欠損）でも0でも正解とします。"
+reference = '''
+DROP TABLE IF EXISTS sales_summary;
+CREATE TABLE sales_summary AS
+    WITH gender_era_amount AS (
+        SELECT TRUNC(age / 10) * 10 AS era, c.gender_cd, SUM(r.amount) AS amount
+        FROM customer c JOIN receipt r ON c.customer_id = r.customer_id
+        GROUP BY era, c.gender_cd
+    )
+    SELECT
+        era,
+        SUM(CASE WHEN gender_cd = '0' THEN amount END) AS male,
+        SUM(CASE WHEN gender_cd = '1' THEN amount END) AS female,
+        SUM(CASE WHEN gender_cd = '9' THEN amount END) AS unknown
+    FROM gender_era_amount
+    GROUP BY era
+;
+CREATE TEMP TABLE knocks_tmp AS SELECT era, female, male, unknown FROM sales_summary;
+DROP TABLE sales_summary;
+ALTER TABLE knocks_tmp RENAME TO sales_summary
+'''
+alternatives = [
+    '''
+DROP TABLE IF EXISTS sales_summary;
+CREATE TABLE sales_summary AS
+    WITH gender_era_amount AS (
+        SELECT TRUNC(age / 10) * 10 AS era, c.gender_cd, SUM(r.amount) AS amount
+        FROM customer c JOIN receipt r ON c.customer_id = r.customer_id
+        GROUP BY era, c.gender_cd
+    )
+    SELECT
+        era,
+        SUM(CASE WHEN gender_cd = '0' THEN amount END) AS male,
+        SUM(CASE WHEN gender_cd = '1' THEN amount END) AS female,
+        SUM(CASE WHEN gender_cd = '9' THEN amount END) AS unknown
+    FROM gender_era_amount
+    GROUP BY era
+''',
+    '''
+DROP TABLE IF EXISTS sales_summary;
+CREATE TABLE sales_summary AS
+    WITH gender_era_amount AS (
+        SELECT TRUNC(age / 10) * 10 AS era, c.gender_cd, SUM(r.amount) AS amount
+        FROM customer c JOIN receipt r ON c.customer_id = r.customer_id
+        GROUP BY era, c.gender_cd
+    )
+    SELECT
+        era,
+        SUM(CASE WHEN gender_cd = '0' THEN amount END) AS male,
+        SUM(CASE WHEN gender_cd = '1' THEN amount END) AS female,
+        SUM(CASE WHEN gender_cd = '9' THEN amount END) AS unknown
+    FROM gender_era_amount
+    GROUP BY era
+;
+CREATE TEMP TABLE knocks_tmp AS SELECT era, COALESCE(female, 0), COALESCE(male, 0), COALESCE(unknown, 0) FROM sales_summary;
+DROP TABLE sales_summary;
+ALTER TABLE knocks_tmp RENAME TO sales_summary
+''',
+    '''
+DROP TABLE IF EXISTS sales_summary;
+CREATE TABLE sales_summary AS
+    WITH gender_era_amount AS (
+        SELECT TRUNC(age / 10) * 10 AS era, c.gender_cd, SUM(r.amount) AS amount
+        FROM customer c JOIN receipt r ON c.customer_id = r.customer_id
+        GROUP BY era, c.gender_cd
+    )
+    SELECT
+        era,
+        SUM(CASE WHEN gender_cd = '0' THEN amount END) AS male,
+        SUM(CASE WHEN gender_cd = '1' THEN amount END) AS female,
+        SUM(CASE WHEN gender_cd = '9' THEN amount END) AS unknown
+    FROM gender_era_amount
+    GROUP BY era
+;
+CREATE TEMP TABLE knocks_tmp AS SELECT era, COALESCE(male, 0), COALESCE(female, 0), COALESCE(unknown, 0) FROM sales_summary;
+DROP TABLE sales_summary;
+ALTER TABLE knocks_tmp RENAME TO sales_summary
+''',
+]

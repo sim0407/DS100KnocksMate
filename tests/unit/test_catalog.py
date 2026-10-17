@@ -29,8 +29,9 @@ def test_verified_spec_is_loaded(exercises):
     assert exercises[0].status == "verified"
 
 
-def test_exercise_without_spec_is_manual_review(exercises):
-    e = next(e for e in exercises if e.id == "100")
+def test_exercise_without_spec_is_manual_review(tmp_path):
+    """採点定義ファイルがない問題は「自動採点未対応」（manual_review）になる。"""
+    e = catalog.load_exercises(problems_dir=tmp_path)[99]
     assert e.status == "unsupported"
     for lang in catalog.LANGUAGES:
         assert e.grading[lang].strategy == "manual_review"

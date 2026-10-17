@@ -1,0 +1,50 @@
+# P-086 / S-086: 申込店舗と顧客住所の距離（km）を10件（085の結果を用意して実行）
+id = "086"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+note = "列名は問いません。顧客ID・顧客住所・店舗住所・距離の4列をこの順に出力してください。"
+setup_note = "085 の緯度経度つき顧客データ df_customer_1（顧客の全項目＋m_longitude, m_latitude）を用意済みです。"
+setup = '''
+df_geocode_1 = df_geocode.groupby("postal_cd").agg(m_longitude=("longitude", "mean"), m_latitude=("latitude", "mean")).reset_index()
+df_customer_1 = pd.merge(df_customer, df_geocode_1, how="inner", on="postal_cd")
+'''
+reference = '''
+df_tmp = df_customer_1.merge(df_store, how="inner", left_on="application_store_cd", right_on="store_cd")
+lat1, lon1 = np.radians(df_tmp["m_latitude"]), np.radians(df_tmp["m_longitude"])
+lat2, lon2 = np.radians(df_tmp["latitude"]), np.radians(df_tmp["longitude"])
+df_tmp["distance"] = 6371 * np.arccos(np.sin(lat1) * np.sin(lat2) + np.cos(lat1) * np.cos(lat2) * np.cos(lon1 - lon2))
+df_tmp[["customer_id", "address_x", "address_y", "distance"]]
+'''
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+column_names = false
+writable = true
+note = "列名は問いません。顧客ID・顧客住所・店舗住所・距離の4列をこの順に出力してください。"
+setup_note = "085 の緯度経度つき顧客データ customer_1 テーブル（顧客の全項目＋m_longitude, m_latitude）を用意済みです。"
+setup = '''
+CREATE TABLE customer_1 AS (
+    WITH geocode_avg AS (
+        SELECT postal_cd, AVG(longitude) AS m_longitude, AVG(latitude) AS m_latitude FROM geocode GROUP BY postal_cd
+    )
+    SELECT * FROM customer c JOIN geocode_avg g USING (postal_cd)
+)
+'''
+reference = '''
+SELECT
+    c.customer_id,
+    c.address AS customer_address,
+    s.address AS store_address,
+    6371 * ACOS(
+        SIN(RADIANS(c.m_latitude)) * SIN(RADIANS(s.latitude))
+        + COS(RADIANS(c.m_latitude)) * COS(RADIANS(s.latitude)) * COS(RADIANS(c.m_longitude) - RADIANS(s.longitude))
+    ) AS distance
+FROM customer_1 c JOIN store s ON c.application_store_cd = s.store_cd
+'''

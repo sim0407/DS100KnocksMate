@@ -1,0 +1,60 @@
+# P-082 / S-082: 単価・原価の欠損を中央値（丸め）で補完した商品データ（作成したデータを採点）
+id = "082"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "unordered"
+artifacts = [
+    'df_product_3',
+]
+note = "作成した商品データを変数 df_product_3 に入れてください（このデータを採点します）。1円未満の丸めは四捨五入・偶数への丸めのどちらでも正解とします。補完後の欠損数の確認は採点しません。"
+reference = '''
+df_product_3 = df_product.fillna(
+    {
+        "unit_price": np.round(np.nanmedian(df_product["unit_price"])),
+        "unit_cost": np.round(np.nanmedian(df_product["unit_cost"])),
+    }
+)
+'''
+alternatives = [
+    '''
+df_product_3 = df_product.fillna(
+    {
+        "unit_price": np.floor(np.nanmedian(df_product["unit_price"]) + 0.5),
+        "unit_cost": np.floor(np.nanmedian(df_product["unit_cost"]) + 0.5),
+    }
+)
+''',
+]
+
+[sql]
+strategy = "table"
+rows = "unordered"
+writable = true
+artifacts = [
+    'product_3',
+]
+note = "作成した商品データをテーブル product_3 にしてください（このテーブルを採点します。実行後に取り消されます）。1円未満の丸めは四捨五入・偶数への丸めのどちらでも正解とします。補完後の欠損数の確認は採点しません。"
+reference = '''
+CREATE TABLE product_3 AS (
+    SELECT
+        product_cd, category_major_cd, category_medium_cd, category_small_cd,
+        COALESCE(unit_price, unit_fill) AS unit_price,
+        COALESCE(unit_cost, cost_fill) AS unit_cost
+    FROM product
+    CROSS JOIN (SELECT ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY unit_price)) AS unit_fill, ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY unit_cost)) AS cost_fill FROM product) stats
+)
+'''
+alternatives = [
+    '''
+CREATE TABLE product_3 AS (
+    SELECT
+        product_cd, category_major_cd, category_medium_cd, category_small_cd,
+        COALESCE(unit_price, unit_fill) AS unit_price,
+        COALESCE(unit_cost, cost_fill) AS unit_cost
+    FROM product
+    CROSS JOIN (SELECT ROUND(CAST(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY unit_price) AS NUMERIC)) AS unit_fill, ROUND(CAST(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY unit_cost) AS NUMERIC)) AS cost_fill FROM product) stats
+)
+''',
+]

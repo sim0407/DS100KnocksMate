@@ -1,0 +1,17 @@
+# P-001 / S-001: レシート明細の全項目の先頭10件を表示
+# 先頭N件ルール（PRODUCT_REQUIREMENTS §9.2）: 全列・10行で、各行が全件に含まれれば正解。
+# SQLは ORDER BY なし LIMIT で行が非決定のため、模範解答と同じ10行は要求しない。
+id = "001"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+reference = "df_receipt"
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+reference = "SELECT * FROM receipt"

@@ -1,0 +1,22 @@
+# P-004 / S-004: 顧客IDが "CS018205000001" の行を、指定4列で抽出
+# 並び順の指定がないため行順は問わない（重複は数える）。
+id = "004"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "unordered"
+reference = '''
+df_receipt[["sales_ymd", "customer_id", "product_cd", "amount"]].query(
+    'customer_id == "CS018205000001"'
+)
+'''
+
+[sql]
+strategy = "table"
+rows = "unordered"
+reference = '''
+SELECT sales_ymd, customer_id, product_cd, amount
+FROM receipt
+WHERE customer_id = 'CS018205000001'
+'''

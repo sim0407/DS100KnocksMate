@@ -1,0 +1,15 @@
+# P-002 / S-002: 指定した4列をこの順で10件表示
+id = "002"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+reference = 'df_receipt[["sales_ymd", "customer_id", "product_cd", "amount"]]'
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+reference = "SELECT sales_ymd, customer_id, product_cd, amount FROM receipt"

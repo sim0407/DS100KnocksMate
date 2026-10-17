@@ -1,0 +1,19 @@
+# P-003 / S-003: 002 に加えて sales_ymd を sales_date に名前変更
+id = "003"
+status = "verified"
+
+[python]
+strategy = "table"
+rows = "subset_n"
+n = 10
+reference = '''
+df_receipt[["sales_ymd", "customer_id", "product_cd", "amount"]].rename(
+    columns={"sales_ymd": "sales_date"}
+)
+'''
+
+[sql]
+strategy = "table"
+rows = "subset_n"
+n = 10
+reference = "SELECT sales_ymd AS sales_date, customer_id, product_cd, amount FROM receipt"

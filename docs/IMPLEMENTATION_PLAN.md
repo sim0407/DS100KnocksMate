@@ -40,14 +40,14 @@ Docker未導入のため、Docker不要の 0-A を先行し、Docker Desktop導�
 4. ✅ pandasのロード検証（`worker/datasets.py`、pandas 3.0.6 に確定）：公式dtype指定でCSVを読み込み、コード列のゼロ埋め保持・NULL・日付列を確認。
 5. ✅ 比較器（TDD, `core/grading/compare.py`）：`dataframe_exact`（順序なし多重集合／順序あり）、N件ルール（部分集合判定）、index無視、型カテゴリ、NaN/NULL、float誤差。CLAUDE.mdの具体的テストケースを網羅。
 6. ✅ Python実行ワーカーの中核（Docker外でも単体テスト可能な部分）：最後の式の値の取得、stdout捕捉、例外整形、結果のJSON正規化（行数・サイズ上限、pickle不使用）、子プロセス＋タイムアウト。
-7. P-001〜005 のPython模範解答をワーカー経由で実行し参照結果を生成、別解・誤答で比較器が正しく判定することをテスト。
+7. ✅ P-001〜005 のPython模範解答をワーカー経由で実行し参照結果を生成、別解・誤答で比較器が正しく判定することをテスト。（採点定義 `exercises/problems/00[1-5].toml`、`core/grading/grader.py`、統合テスト `tests/integration/test_grading_cases.py`。参照結果は上流Notebookの保存出力と照合済み）
 8. SQLite進捗リポジトリ（TDD）：`exercise_status` / `attempts`、マイグレーション、再オープン後の復元。
 
 **0-B（Docker Desktop導入後）**
 
 9. （DB・worker・testsまで実装済み。app は Phase 1）Compose：`app`（Streamlit, 127.0.0.1:8501のみ公開）/ `worker`（内部ネットワーク、非root、`cap_drop: ALL`、read-only rootfs、tmpfs、CPU/メモリ/PID制限）/ `db`（Postgres 16、ホスト非公開、app用ネットワークのみ）。worker⇔db間は到達不可。
 10. ✅ Postgres初期化（`docker/db/`、ビルド時に初期化。統合テスト41件）：上流DDLとCOPYを取り込み、SELECT権限のみの学習用ロールを作成。`BEGIN READ ONLY` + `statement_timeout` で更新・DDLが拒否されることを統合テストで確認。
-11. S-001〜005 の模範解答で参照結果を生成し、比較器で判定できることを確認。
+11. ✅ S-001〜005 の模範解答で参照結果を生成し、比較器で判定できることを確認。
 12. ✅（単体コンテナでのスモークに加え、compose構成で DB/インターネット到達不可・DB資格情報なし・読み取り専用FSを統合テストで確認）workerの隔離確認：無限ループ、巨大出力、メモリ過大、ネットワーク・DBへの到達試行が抑止されることを確認。
 
 **Phase 0 Done判定**：上記の既存Done条件。0-Bが未実施の間は「Phase 0 部分完了（Docker依存部分は未検証）」と記録する。

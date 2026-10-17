@@ -64,7 +64,10 @@
 - **ソート必須問題**: 指定ソートキーの順序のみ検証し、同順位（tie）内の並びは問わない。
 - **SQL**: Phase 1は単一文のみ。専用の SELECT 権限のみロール + `BEGIN READ ONLY` + `statement_timeout` を併用。更新系問題（043, 080〜093）はPhase 3まで `manual_review`/未対応表示。
 - **Python実行環境の境界**: ワーカーはCSVから `df_*` を読み込み、Postgres接続情報・ネットワークを持たない。
-- **Postgres版**: 16系（上流は15.1）。差異が出たら記録。
+- **Postgres版**: 16.15（`postgres:16.15-trixie` をダイジェスト固定、上流は15.1）、`ja_JP.UTF-8`。差異が出たら記録。
+- **教材DBの構築**: イメージのビルド時に initdb・DDL・COPY・ロール設定まで実行し、初期化済みデータをイメージに含める（永続volumeなし、コンテナ再作成で常に初期状態、起動が速い）。
+- **DBの認証**: 管理者 `postgres` はコンテナ内UNIXソケット（peer）のみ。学習者用 `knocks_learner` はSELECTのみ・TEMP不可・`default_transaction_read_only`・`statement_timeout` を固定し、内部ネットワークから scram 認証。パスワードは秘密情報扱いしない（非公開ネットワーク・読み取り専用のため）。
+- **SQLの実行方式**: `DECLARE カーソル FOR <学習者SQL>` を prepared statement で送る（psycopg `prepare=True`）。実機検証で、SELECT系以外は構文エラー、複数文はサーバが拒否、`%` もそのまま扱えることを確認。FETCHで先頭N行、MOVEで総行数。psycopg の通常実行（パラメータなし）は複数文を実行してしまうため使わない。
 - **エディタ**: Phase 1は `st.text_area`。保存は 実行/採点/言語・問題切替時、および入力確定（blur）時。ブラウザを閉じる直前の未確定入力は失われうる点をREADMEに明記。
 - **Pythonワーカーの実行方式（確定・0-A⑥で検証済み）**: ライブラリと教材データを読み込み済みの常駐親プロセスから、実行ごとに `fork` した子プロセスでコードを実行（`worker/sandbox.py`）。子は setsid・実時間タイムアウトでプロセスグループごとSIGKILL・RLIMIT_CPU/FSIZE・新規一時ディレクトリ・`oom_score_adj=1000`・fd 0/1/2 を /dev/null。Linux専用で、fork系テストはWindowsではskipしコンテナ内で実行。
 - **ワーカーのプロトコル**: 標準ライブラリの **シングルスレッド** `HTTPServer`（`worker/server.py`、POST /execute, GET /health）。マルチスレッドからのforkはデッドロックしうるため。ヘルスチェックはTCP接続の受付で判定。コンテナは `init: true`（ゾンビ回収）。学習者コードはログに出さない。

@@ -7,6 +7,9 @@ requires-python = ">=3.12,<3.13"
 dependencies = []
 
 [dependency-groups]
+app = [
+    "psycopg[binary]==3.3.6",
+]
 dev = [
     "pytest>=9.1.1",
     "ruff>=0.17.1",
@@ -21,7 +24,7 @@ worker = [
 
 [tool.uv]
 package = false
-default-groups = ["dev", "worker"]
+default-groups = ["dev", "worker", "app"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

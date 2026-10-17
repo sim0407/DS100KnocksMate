@@ -45,10 +45,10 @@ Docker未導入のため、Docker不要の 0-A を先行し、Docker Desktop導�
 
 **0-B（Docker Desktop導入後）**
 
-9. Compose：`app`（Streamlit, 127.0.0.1:8501のみ公開）/ `worker`（内部ネットワーク、非root、`cap_drop: ALL`、read-only rootfs、tmpfs、CPU/メモリ/PID制限）/ `db`（Postgres 16、ホスト非公開、app用ネットワークのみ）。worker⇔db間は到達不可。
-10. Postgres初期化：上流DDLとCOPYを取り込み、SELECT権限のみの学習用ロールを作成。`BEGIN READ ONLY` + `statement_timeout` で更新・DDLが拒否されることを統合テストで確認。
+9. （DB・worker・testsまで実装済み。app は Phase 1）Compose：`app`（Streamlit, 127.0.0.1:8501のみ公開）/ `worker`（内部ネットワーク、非root、`cap_drop: ALL`、read-only rootfs、tmpfs、CPU/メモリ/PID制限）/ `db`（Postgres 16、ホスト非公開、app用ネットワークのみ）。worker⇔db間は到達不可。
+10. ✅ Postgres初期化（`docker/db/`、ビルド時に初期化。統合テスト41件）：上流DDLとCOPYを取り込み、SELECT権限のみの学習用ロールを作成。`BEGIN READ ONLY` + `statement_timeout` で更新・DDLが拒否されることを統合テストで確認。
 11. S-001〜005 の模範解答で参照結果を生成し、比較器で判定できることを確認。
-12. （⑥で `--network none` の単体コンテナにて実施済み：無限ループ・メモリ爆弾・forkボム・巨大出力・ルートFS/大容量書込・外部通信が抑止され、ワーカー本体は継続稼働。compose構成での再確認が残り）workerの隔離確認：無限ループ、巨大出力、メモリ過大、ネットワーク・DBへの到達試行が抑止されることを確認。
+12. ✅（単体コンテナでのスモークに加え、compose構成で DB/インターネット到達不可・DB資格情報なし・読み取り専用FSを統合テストで確認）workerの隔離確認：無限ループ、巨大出力、メモリ過大、ネットワーク・DBへの到達試行が抑止されることを確認。
 
 **Phase 0 Done判定**：上記の既存Done条件。0-Bが未実施の間は「Phase 0 部分完了（Docker依存部分は未検証）」と記録する。
 

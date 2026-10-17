@@ -1,0 +1,63 @@
+# 100本ノック学習アプリ（ローカル専用）
+#
+#   起動:    docker compose up -d --build        → http://127.0.0.1:8501 （UIはPhase 1で追加）
+#   停止:    docker compose down                 （学習履歴は残る）
+#   注意:    docker compose down -v は学習履歴（volume）も削除する
+#   テスト:  docker compose --profile test run --rm --build tests
+#
+# ネットワーク分離: worker（学習者のPythonを実行）は DB に到達できない。
+# DB・worker はホストにポートを公開しない。
+name: ds100knocks
+
+services:
+  db:
+    build:
+      context: .
+      dockerfile: docker/db/Dockerfile
+    networks: [dbnet]
+    mem_limit: 1g
+    pids_limit: 256
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/worker/Dockerfile
+      target: base
+    init: true            # fork した子・孫プロセス（ゾンビ）の回収
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 1g
+    memswap_limit: 1g
+    pids_limit: 128
+    cpus: 2
+    networks: [workernet]
+    restart: unless-stopped
+
+  # 統合テスト（DB・workerの両方に接続）。通常の起動では動かない。
+  tests:
+    profiles: [test]
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+      target: test
+    environment:
+      KNOCKS_DB_DSN: "host=db dbname=dsdojo_db user=knocks_learner password=knocks-learner-readonly"
+      KNOCKS_WORKER_URL: "http://worker:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      worker:
+        condition: service_healthy
+    networks: [dbnet, workernet]
+
+networks:
+  # internal: 外部（インターネット）へ出られない
+  dbnet:
+    internal: true
+  workernet:
+    internal: true

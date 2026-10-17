@@ -71,5 +71,14 @@ uv run ruff check . && uv run ruff format --check .   # lint / format チェッ�
 uv run python -m tools.extract_problems               # 同梱教材から問題カタログを再生成
 ```
 
+Docker（Docker Desktop）を使う統合テスト:
+
+```bash
+docker compose --profile test run --rm --build tests   # DB・Pythonワーカーを起動して統合テスト
+docker compose --profile test down                     # 後片付け
+docker build -f docker/worker/Dockerfile --target test -t knocks-worker:test .
+docker run --rm --init knocks-worker:test              # ワーカー単体テスト（fork隔離を含む）
+```
+
 - 原教材のスナップショット: `upstream/`（出典・ライセンスは `THIRD_PARTY_NOTICES.md`）
 - 生成された問題カタログ: `exercises/catalog/`

@@ -133,3 +133,13 @@ def test_overview_rows(service):
 def test_auto_gradable_ids(service):
     ids = service.auto_gradable_ids("python")
     assert "001" in ids and "100" in ids and "075" not in ids and "020" not in ids
+
+
+def test_hints_and_reveal(service):
+    h = service.hints("023", "sql")
+    assert "SUM" in h.functions
+    service.reveal_hint("023", "sql", 1)
+    service.reveal_hint("023", "sql", 3)
+    rows = {r["id"]: r for r in service.overview()}
+    assert rows["023"]["sql_hint"] == 3
+    assert rows["023"]["python_hint"] == 0

@@ -95,6 +95,10 @@ def on_editor_mode_change() -> None:
         del st.session_state[key]
 
 
+def on_reveal_hint(exercise_id: str, language: str, level: int) -> None:
+    get_service().reveal_hint(exercise_id, language, level)
+
+
 def on_review_change(exercise_id: str, language: str) -> None:
     flag = st.session_state[f"review::{exercise_id}::{language}"]
     get_service().progress.set_needs_review(exercise_id, language, flag)
@@ -188,6 +192,59 @@ def show_grade(grade: GradeResult) -> None:
         st.error(f"⚠️ **エラーのため採点できません**\n\n{reasons}")
 
 
+# ---------------------------------------------------------------- ヒント・解答例
+
+HINT_BUTTONS = ("ヒント1: 使う関数・構文", "ヒント2: コードの骨組み", "解答例を見る")
+SKELETON_NOTES = {
+    "python": "文字列・数値を「…」に置き換えています。",
+    "sql": "テーブル名・列名・文字列・数値を「…」に置き換えています。",
+}
+
+
+def hint_marker(level: int) -> str:
+    return " 📖" if level >= 3 else " 💡" if level >= 1 else ""
+
+
+def render_hints(service: TrainerService, exercise_id: str, language: str, level: int) -> None:
+    hints = service.hints(exercise_id, language)
+    with st.expander("💡 ヒント・解答例", expanded=level > 0):
+        st.caption(
+            "まずは自分で考えてから、少しずつ開いてみましょう。見た段階は記録されますが、採点には影響しません。"
+        )
+        for column, (number, label) in zip(
+            st.columns(3), enumerate(HINT_BUTTONS, start=1), strict=True
+        ):
+            column.button(
+                label,
+                key=f"hint{number}",
+                disabled=level >= number or level < number - 1,
+                on_click=on_reveal_hint,
+                args=(exercise_id, language, number),
+                width="stretch",
+            )
+        if level >= 1:
+            st.markdown("**ヒント1: 使う関数・構文**")
+            st.markdown(" ".join(f"`{name}`" for name in hints.functions))
+        if level >= 2:
+            st.markdown(f"**ヒント2: コードの骨組み**（{SKELETON_NOTES[language]}）")
+            st.code(hints.skeleton, language=language)
+        if level >= 3:
+            st.markdown("**解答例**（出典: データサイエンス100本ノック 解答Notebook、MIT License）")
+            for number, answer in enumerate(hints.answers, start=1):
+                if len(hints.answers) > 1:
+                    st.caption(f"解答例 {number}")
+                if answer.note:
+                    (st.warning if answer.broken else st.info)(answer.note)
+                st.code(answer.code, language=language)
+            if hints.working_example:
+                st.markdown(
+                    "**pandas 3 で動く書き方の例**（採点用の参照コード。表示件数の指定などは省略しています）"
+                )
+                st.code(hints.working_example, language=language)
+            for explanation in hints.explanations:
+                st.markdown(explanation)
+
+
 # ---------------------------------------------------------------- ページ
 
 
@@ -198,7 +255,7 @@ def state_label(row: dict, language: str) -> str:
         text += "（採点未対応）"
     if row[f"{language}_review"]:
         text += " 🔖"
-    return text
+    return text + hint_marker(row[f"{language}_hint"])
 
 
 def render_overview(service: TrainerService) -> None:
@@ -311,6 +368,7 @@ def render_practice(service: TrainerService, exercise_id: str, language: str, or
     col_review.checkbox(
         "復習対象にする", key=review_key, on_change=on_review_change, args=(exercise_id, language)
     )
+    render_hints(service, exercise_id, language, status.hint_level if status else 0)
 
     okey = outcome_key(exercise_id, language)
     if run_clicked or run_shortcut:
@@ -382,6 +440,7 @@ def main() -> None:
             status = statuses.get((exercise_id, language))
             icon = STATE_ICONS.get(status.state, "⬜") if status else "⬜"
             review = " 🔖" if status and status.needs_review else ""
+            review += hint_marker(status.hint_level) if status else ""
             unsupported = (
                 "（採点未対応）" if ex.grading[language].strategy == "manual_review" else ""
             )
@@ -390,7 +449,7 @@ def main() -> None:
         exercise_id = st.selectbox(
             "問題", order, format_func=label, key="exercise_id", on_change=on_exercise_select
         )
-        st.caption("✅ 正解 / ✏️ 挑戦中 / ⬜ 未着手 / 🔖 復習対象")
+        st.caption("✅ 正解 / ✏️ 挑戦中 / ⬜ 未着手 / 🔖 復習対象 / 💡 ヒント / 📖 解答例を見た")
         if "editor_mode" not in st.session_state:
             st.session_state["editor_mode"] = DEFAULT_EDITOR
         st.radio(

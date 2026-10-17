@@ -13,6 +13,7 @@ from pathlib import Path
 from core.execution.python_runner import run_python
 from core.execution.sql_runner import run_sql
 from core.exercises.catalog import PROJECT_ROOT, Exercise, load_exercises
+from core.exercises.hints import Hints, build_hints
 from core.grading.grader import ExecOptions, GradeResult, ReferenceCache, Runner, grade, options_for
 from core.progress.repository import ExerciseStatus, ProgressRepository
 
@@ -95,6 +96,12 @@ class TrainerService:
     def save_draft(self, exercise_id: str, language: str, code: str) -> None:
         self.progress.save_draft(exercise_id, language, code)
 
+    def hints(self, exercise_id: str, language: str) -> Hints:
+        return build_hints(exercise_id, language)
+
+    def reveal_hint(self, exercise_id: str, language: str, level: int) -> None:
+        self.progress.reveal_hint(exercise_id, language, level)
+
     def statuses(self) -> dict[tuple[str, str], ExerciseStatus]:
         return self.progress.list_statuses()
 
@@ -115,6 +122,7 @@ class TrainerService:
                 row[f"{lang}_state"] = status.state if status else "not_started"
                 row[f"{lang}_review"] = bool(status and status.needs_review)
                 row[f"{lang}_auto"] = e.grading[lang].strategy != "manual_review"
+                row[f"{lang}_hint"] = status.hint_level if status else 0
             rows.append(row)
         return rows
 

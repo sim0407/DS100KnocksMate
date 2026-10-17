@@ -1,0 +1,98 @@
+# 上流の解答例（exercises/catalog/answers.json）に添える注記。画面の「解答例」で表示する。
+# cell は解答例の番号（0始まり）。broken = true の解答例は本アプリの環境（pandas 3 等）では動かない。
+
+[[note]]
+id = "071"
+language = "python"
+cell = 0
+broken = true
+text = "この解答例は pandas 3 では動きません（apply 内の x[0] のような位置指定は x.iloc[0] と書く必要があります）。下の「pandas 3 で動く書き方の例」を参考にしてください。"
+
+[[note]]
+id = "072"
+language = "python"
+cell = 0
+broken = true
+text = "この解答例は pandas 3 では動きません（apply 内の x[0] のような位置指定は x.iloc[0] と書く必要があります）。下の「pandas 3 で動く書き方の例」を参考にしてください。"
+
+[[note]]
+id = "073"
+language = "python"
+cell = 0
+broken = true
+text = "この解答例は pandas 3 では動きません（Series.view は削除されました。astype('int64') などを使います）。下の「pandas 3 で動く書き方の例」を参考にしてください。"
+
+[[note]]
+id = "083"
+language = "python"
+cell = 0
+broken = true
+text = "この解答例は pandas 3 では動きません（apply 内の x[0] のような位置指定は x.iloc[0] と書く必要があります）。コード例2・3は動きます。"
+
+[[note]]
+id = "084"
+language = "python"
+cell = 0
+broken = true
+text = "この解答例は pandas 3 では動きません（apply 内の x[0] のような位置指定は x.iloc[0] と書く必要があります）。下の「pandas 3 で動く書き方の例」を参考にしてください。"
+
+[[note]]
+id = "086"
+language = "python"
+cell = 0
+broken = true
+text = "この解答例は pandas 3 では動きません（apply 内の x[0] のような位置指定は x.iloc[0] と書く必要があります）。コード例2は動きます。"
+
+[[note]]
+id = "069"
+language = "python"
+cell = 1
+text = "参考の書き方です（全カテゴリの列を含む横長の形）。本アプリの採点では、画面の採点基準にある4列の構成で出力してください。"
+
+[[note]]
+id = "092"
+language = "sql"
+cell = 0
+text = "上流の解答例は customer_std から address 列を落としていますが、正規化で落としてよいのは性別（gender）だけです。本アプリでは address を残した形を正解とします。"
+
+[[note]]
+id = "094"
+language = "sql"
+cell = 0
+text = "上流の環境用の書き方です。このアプリではDBサーバー上のファイルには書き込めないため、TO '/tmp/data/...' の代わりに TO STDOUT と書いてください。"
+
+[[note]]
+id = "095"
+language = "sql"
+cell = 0
+text = "上流の環境用の書き方です。このアプリではDBサーバー上のファイルには書き込めないため、TO '/tmp/data/...' の代わりに TO STDOUT と書いてください。"
+
+[[note]]
+id = "096"
+language = "sql"
+cell = 0
+text = "上流の環境用の書き方です。このアプリではDBサーバー上のファイルには書き込めないため、TO '/tmp/data/...' の代わりに TO STDOUT と書いてください。"
+
+[[note]]
+id = "099"
+language = "sql"
+cell = 0
+text = "上流の環境用の書き方です。このアプリではDBサーバー上のファイルには書き込めないため、TO '/tmp/data/...' の代わりに TO STDOUT と書いてください。"
+
+[[note]]
+id = "097"
+language = "sql"
+cell = 1
+text = "上流の環境用の書き方です。このアプリではDBサーバー上のファイルは読めないため、FROM '/tmp/data/...' の代わりに FROM STDIN と書いてください（用意したファイルの内容が読み込まれます）。"
+
+[[note]]
+id = "098"
+language = "sql"
+cell = 1
+text = "上流の環境用の書き方です。このアプリではDBサーバー上のファイルは読めないため、FROM '/tmp/data/...' の代わりに FROM STDIN と書いてください（用意したファイルの内容が読み込まれます）。"
+
+[[note]]
+id = "100"
+language = "sql"
+cell = 1
+text = "上流の環境用の書き方です。このアプリではDBサーバー上のファイルは読めないため、FROM '/tmp/data/...' の代わりに FROM STDIN と書いてください（用意したファイルの内容が読み込まれます）。"

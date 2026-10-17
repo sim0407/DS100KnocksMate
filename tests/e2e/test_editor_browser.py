@@ -49,6 +49,8 @@ def editor(page):
 
 def choose_exercise(page, exercise_id):
     page.locator('[data-testid="stSidebar"] [data-testid="stSelectbox"]').click()
+    # 選択肢は表示中の分しか描画されないため、番号を入力して絞り込んでから選ぶ
+    page.keyboard.type(exercise_id)
     page.get_by_role("option", name=re.compile(rf" {exercise_id} ")).click()
     expect(page.get_by_role("heading", name=re.compile(rf"[PS]-{exercise_id}"))).to_be_visible()
     editor(page).wait_for()
@@ -173,3 +175,21 @@ def test_language_switch_keeps_each_code(page):
     expect(editor(page)).to_have_value("python_code = 1")
     choose_language(page, "SQL")
     expect(editor(page)).to_have_value("SELECT 8")
+
+
+def test_hints_step_by_step(page):
+    choose_exercise(page, "024")
+    hint1 = page.get_by_role("button", name="ヒント1: 使う関数・構文")
+    if not hint1.is_visible():  # まだ何も見ていなければ欄は閉じている
+        page.get_by_text("💡 ヒント・解答例").click()
+    if hint1.is_disabled():
+        pytest.skip(
+            "前回の実行でヒントを表示済み（見た段階は記録される）。down -v で初期化してから実行してください"
+        )
+    hint1.click()
+    expect(page.get_by_text("ヒント1: 使う関数・構文", exact=False).first).to_be_visible()
+    expect(page.get_by_role("button", name="解答例を見る")).to_be_disabled()
+    page.get_by_role("button", name="ヒント2: コードの骨組み").click()
+    expect(page.get_by_text("文字列・数値を「…」に置き換えています")).to_be_visible()
+    page.get_by_role("button", name="解答例を見る").click()
+    expect(page.get_by_text("MIT License", exact=False)).to_be_visible()

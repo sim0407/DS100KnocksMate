@@ -207,3 +207,31 @@ def test_sql_writable_problem(progress_db):
     assert len(at.dataframe[0].value) == 1
     at.button(key="grade").click().run()
     assert "正解です" in texts(at.success)
+
+
+def test_hints_are_revealed_step_by_step_and_remembered(progress_db):
+    at = start()
+    at.selectbox(key="exercise_id").set_value("023").run()
+    assert at.button(key="hint2").disabled and at.button(key="hint3").disabled
+    at.button(key="hint1").click().run()
+    assert "`groupby`" in texts(at.markdown)
+    assert not at.button(key="hint2").disabled and at.button(key="hint3").disabled
+    at.button(key="hint2").click().run()
+    assert any("…" in str(c.value) for c in at.code)
+    at.button(key="hint3").click().run()
+    assert any("# コード例1" in str(c.value) for c in at.code)
+    assert "MIT License" in texts(at.markdown)
+
+    restarted = start()
+    restarted.selectbox(key="exercise_id").set_value("023").run()
+    assert any("# コード例1" in str(c.value) for c in restarted.code)
+    assert "📖" in restarted.selectbox(key="exercise_id").format_func("023")
+
+
+def test_broken_upstream_answer_shows_warning_and_working_example(progress_db):
+    at = start()
+    at.selectbox(key="exercise_id").set_value("071").run()
+    for key in ("hint1", "hint2", "hint3"):
+        at.button(key=key).click().run()
+    assert "pandas 3" in texts(at.warning)
+    assert "pandas 3 で動く書き方の例" in texts(at.markdown)

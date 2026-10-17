@@ -156,3 +156,40 @@ def test_timestamps_are_utc_iso(repo):
 def test_wal_mode_enabled(path, repo):
     with sqlite3.connect(path) as conn:
         assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+
+
+def test_hint_level_is_recorded_and_never_decreases(repo):
+    assert repo.get_status("001", "python") is None
+    repo.reveal_hint("001", "python", 1)
+    status = repo.get_status("001", "python")
+    assert status.hint_level == 1
+    assert status.state == "not_started"  # 見ただけでは挑戦中にしない
+    repo.reveal_hint("001", "python", 3)
+    repo.reveal_hint("001", "python", 2)
+    assert repo.get_status("001", "python").hint_level == 3
+    assert repo.get_status("001", "sql") is None  # 言語ごと
+
+
+def test_migration_from_v1_keeps_existing_data(path):
+    """v1 のスキーマ（hint_level なし）で作られた学習履歴を、データを保ったまま更新する。"""
+    import sqlite3
+
+    from core.progress.repository import MIGRATIONS
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(path)
+    conn.executescript(MIGRATIONS[0] + "PRAGMA user_version = 1;")
+    conn.execute(
+        "INSERT INTO exercise_status (exercise_id, language, state, last_code, updated_at)"
+        " VALUES ('001', 'python', 'passed', 'old code', '2026-10-01T00:00:00+00:00')"
+    )
+    conn.commit()
+    conn.close()
+
+    repo = ProgressRepository(path)
+    status = repo.get_status("001", "python")
+    assert status.state == "passed"
+    assert status.last_code == "old code"
+    assert status.hint_level == 0
+    with sqlite3.connect(path) as c:
+        assert c.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION

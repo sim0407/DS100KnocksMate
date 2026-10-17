@@ -5,6 +5,7 @@ import os
 import threading
 import urllib.error
 import urllib.request
+from importlib.util import find_spec
 
 import pandas as pd
 import pytest
@@ -50,7 +51,10 @@ def test_parse_request_applies_values():
     assert limits.timeout_sec == 3.0
 
 
-needs_fork = pytest.mark.skipif(not hasattr(os, "fork"), reason="fork が使えない環境（Windows）")
+needs_fork = pytest.mark.skipif(
+    not (hasattr(os, "fork") and find_spec("pyarrow") is None),
+    reason="fork のテストはワーカーのコンテナ内で実行（test_worker_sandbox.py 参照）",
+)
 
 # テストではサーバを別スレッドで動かすため fork 時に警告が出る（本番はシングルスレッドで出ない）
 pytestmark = pytest.mark.filterwarnings(

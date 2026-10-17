@@ -5,11 +5,19 @@ Docker上では `docker compose run --rm worker-test` 等で実行する（READM
 
 import os
 import time
+from importlib.util import find_spec
 
 import pandas as pd
 import pytest
 
-pytestmark = pytest.mark.skipif(not hasattr(os, "fork"), reason="fork が使えない環境（Windows）")
+# fork はスレッドのないプロセスで行う前提（本番のワーカーは単一スレッド）。pyarrow がある開発環境
+# では pandas の読み込みでスレッドが生じ、本番と条件が違う上に子プロセスがデッドロックしうるため、
+# 本番と同じワーカーのコンテナ（CI の worker ジョブ）で実行する。
+FORK_TESTABLE = hasattr(os, "fork") and find_spec("pyarrow") is None
+pytestmark = pytest.mark.skipif(
+    not FORK_TESTABLE,
+    reason="fork のテストはワーカーのコンテナ内で実行（Windows には fork がなく、pyarrow のある環境はスレッドが生じるため）",
+)
 
 if hasattr(os, "fork"):
     from worker.sandbox import Limits, run_in_sandbox
@@ -130,3 +138,11 @@ def test_files_not_collected_by_default(base):
 def test_setup_through_sandbox(base):
     r = run_in_sandbox("y + 1", base, limits=Limits(), setup="y = 41")
     assert r["result"]["value"] == 42
+
+
+def test_server_parent_process_is_single_threaded():
+    """ワーカーの親プロセスは、ライブラリと教材データを読み込んだ後もスレッド1本（fork の前提）。"""
+    from worker.server import build_base_namespace
+
+    build_base_namespace()
+    assert len(os.listdir("/proc/self/task")) == 1

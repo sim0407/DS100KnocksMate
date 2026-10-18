@@ -43,6 +43,7 @@
 - **macOS**: フォルダ内の **`start.command`** をダブルクリック（初回に「開発元を確認できない」と表示された場合は、右クリック →「開く」。それでも開けない場合はターミナルで `bash start.command`）
 
 Docker Desktop が起動していなければ自動で起動し、準備ができるとブラウザで **http://127.0.0.1:8501** が開きます。初回は部品のダウンロードと組み立てで数分かかります。
+うまく起動しない場合は「[困ったとき](#困ったとき)」を参照してください。
 
 ### コマンドで起動する
 
@@ -65,6 +66,8 @@ $env:KNOCKS_PORT=8600; docker compose up -d --build   # → http://127.0.0.1:860
 # macOS / Linux
 KNOCKS_PORT=8600 docker compose up -d --build
 ```
+
+起動用ファイルでも同じ指定が使えます（Windows: PowerShell で `$env:KNOCKS_PORT=8600; .\start.bat`、macOS: `KNOCKS_PORT=8600 bash start.command`）。
 
 ## 使い方
 
@@ -89,6 +92,32 @@ KNOCKS_PORT=8600 docker compose up -d --build
 - コマンド: `docker compose down`（終了）／ `docker compose up -d`（再開）
 
 > ⚠️ `docker compose down -v` のように **`-v` を付けると学習履歴も削除されます**。
+
+## 困ったとき
+
+### 「CERTIFICATE_VERIFY_FAILED」（証明書を確認できない）で組み立てに失敗する
+
+ウイルス対策ソフトの HTTPS 検査（「Web 保護」「HTTPS スキャン」など）や、会社・学校のネットワーク（プロキシ）が通信を検査していると、アプリの部品をダウンロードするときにこのエラーになります。
+
+- **起動用ファイル（`start.bat` / `start.command`）を使う場合**: エラーを見つけると理由を表示し、「この PC の証明書を使って組み立て直しますか？」と確認します。Enter（または `y`）で、PC が信頼している証明書を `docker/certs/host-trusted-roots.crt` に書き出して組み立て直します。書き出したファイルは Git の管理対象外で、公開されません。
+- **それでも失敗する場合・コマンドで起動する場合**: 検査に使われている証明書（PEM 形式、拡張子 `.crt`）を `docker/certs` フォルダに置いてから、もう一度起動します。会社・学校のネットワークでは、管理者に「プロキシ（または TLS 検査）のルート証明書」をもらってください。詳しくは [docker/certs/README.md](docker/certs/README.md)。
+- 置いた証明書が不要になったら、`docker/certs` から削除して、もう一度起動（組み立て直し）します。
+
+### ポート 8501 が使われていて起動できない
+
+「port is already allocated」などと表示された場合は、ほかのアプリが同じポートを使っています。「[ポートを変える](#ポートを変える)」の方法で別のポートを指定してください。
+
+### `start.bat` のウィンドウがすぐ閉じる・何も起きない
+
+PowerShell の実行が制限されている可能性があります。フォルダ内で PowerShell を開き、次を実行するとメッセージを確認できます。
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\start.ps1
+```
+
+### Docker Desktop が起動しない
+
+Docker Desktop を手動で起動し、画面左下が「Engine running」になってから、もう一度起動用ファイルを実行してください。
 
 ## 学習履歴の保存場所
 
@@ -169,4 +198,5 @@ docker compose -p ds100knocks-e2e down -v
 | `exercises/` | 問題カタログ（生成物）、採点定義（`problems/*.toml`）、解答例の注記 |
 | `upstream/` | 原教材のスナップショット（無改変） |
 | `tools/` | 教材の同梱・問題抽出・依存ライセンス一覧・スクリーンショット |
+| `scripts/windows/` | Windows の起動用ファイルの本体（`start.bat` / `stop.bat` から呼ぶ PowerShell） |
 | `docs/` | 要件・設計・計画・決定事項・教材の出典・公開前の確認手順・依存ライセンス |

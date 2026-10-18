@@ -7,6 +7,8 @@
 /progress/
 
 # --- 秘密情報 ---
+# 起動用ファイルが書き出す、この PC の証明書（docker/certs/README.md）
+/docker/certs/*.crt
 .env
 .env.*
 !.env.example

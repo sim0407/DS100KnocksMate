@@ -9,6 +9,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /opt/knocks
 
+# HTTPS の通信を検査するソフト（ウイルス対策ソフトの HTTPS スキャン、会社のプロキシ等）がある環境向け:
+# docker/certs/*.crt に置いた証明書を追加で信頼する（起動用ファイルが必要に応じて PC の証明書を書き出す）
+COPY docker/certs/ /usr/local/share/ca-certificates/knocks/
+RUN update-ca-certificates >/dev/null
+ENV PIP_CERT=/etc/ssl/certs/ca-certificates.crt
+
 COPY docker/app/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir --require-hashes -r /tmp/requirements.txt \
     && rm /tmp/requirements.txt

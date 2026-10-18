@@ -38,7 +38,7 @@ Docker未導入のため、Docker不要の 0-A を先行し、Docker Desktop導�
 2. ✅ 上流の固定commitから CSV 6件と Notebook 4件を `upstream/` 相当の場所に同梱し、`THIRD_PARTY_NOTICES.md` にMIT表示とcommit hashを記録。
 3. ✅ 問題抽出ツール：Notebookから `id / python問題文 / sql問題文 / 模範解答コード` を抽出し、カタログ（`exercises/catalog/problems.json` / `answers.json`）を生成。採点方式など手作業の定義は別ファイル（YAML、⑤⑦で作成）。まず100問の抽出件数・ID対応をテストで確認。
 4. ✅ pandasのロード検証（`worker/datasets.py`、pandas 3.0.6 に確定）：公式dtype指定でCSVを読み込み、コード列のゼロ埋め保持・NULL・日付列を確認。
-5. ✅ 比較器（TDD, `core/grading/compare.py`）：`dataframe_exact`（順序なし多重集合／順序あり）、N件ルール（部分集合判定）、index無視、型カテゴリ、NaN/NULL、float誤差。CLAUDE.mdの具体的テストケースを網羅。
+5. ✅ 比較器（TDD, `core/grading/compare.py`）：`dataframe_exact`（順序なし多重集合／順序あり）、N件ルール（部分集合判定）、index無視、型カテゴリ、NaN/NULL、float誤差。TECHNICAL_DESIGN.md §5 の具体的テストケースを網羅。
 6. ✅ Python実行ワーカーの中核（Docker外でも単体テスト可能な部分）：最後の式の値の取得、stdout捕捉、例外整形、結果のJSON正規化（行数・サイズ上限、pickle不使用）、子プロセス＋タイムアウト。
 7. ✅ P-001〜005 のPython模範解答をワーカー経由で実行し参照結果を生成、別解・誤答で比較器が正しく判定することをテスト。（採点定義 `exercises/problems/00[1-5].toml`、`core/grading/grader.py`、統合テスト `tests/integration/test_grading_cases.py`。参照結果は上流Notebookの保存出力と照合済み）
 8. ✅ SQLite進捗リポジトリ（TDD, `core/progress/repository.py`）：`exercise_status` / `attempts`、マイグレーション、再オープン後の復元。

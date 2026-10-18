@@ -23,7 +23,6 @@ UIと採点ロジック、問題定義、永続化、Python実行環境を分離
 
 ```text
 DS100KnocksMate/
-├── CLAUDE.md
 ├── README.md
 ├── app/                     # Streamlit UI, controllers
 ├── core/

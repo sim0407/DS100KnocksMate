@@ -5,6 +5,13 @@ updates:
     directories: ["/docker/app", "/docker/worker", "/docker/db"]
     schedule:
       interval: monthly
+    ignore:
+      # Python は 3.12 系、PostgreSQL は 16 系に固定（版を上げるときは互換性を確認して別作業で行う）。
+      # 同じ系列内のパッチ更新（3.12.15 → 3.12.16、16.15 → 16.16）だけを提案させる
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "postgres"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: "/"
     schedule:

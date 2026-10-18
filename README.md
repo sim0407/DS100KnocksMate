@@ -127,6 +127,8 @@ Docker Desktop を手動で起動し、画面左下が「Engine running」にな
 
 新しい版のファイルを取得してから（`git pull` など）、`start.bat` / `start.command` を実行するか `docker compose up -d --build` を実行します。学習履歴はそのまま引き継がれます（形式の変更は自動で移行されます）。
 
+ZIP で取得した場合は、新しい ZIP を展開して、その中の `start.bat` / `start.command` を実行します。学習履歴はフォルダの中ではなく Docker 側に保存されているので、フォルダの名前や場所が変わっても引き継がれます。古いフォルダは削除してかまいません。
+
 ## アンインストール
 
 ```bash

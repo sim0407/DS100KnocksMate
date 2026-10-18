@@ -75,6 +75,22 @@ def table(columns, rows):
 UNIVERSE = table(["customer_id", "x"], [[f"C{i:03d}", "v"] for i in range(10)])
 
 
+def test_unparsable_learner_csv_is_failure_not_exception():
+    """標準の csv の項目サイズ上限（131072文字）を超えるファイルでも例外にしない。"""
+    actual = b"product_cd,category_major_cd,unit_price\nP001," + b"x" * 140_000 + b",198\n"
+    result = compare_files(EXPECTED, actual, CSV)
+    assert not result.passed
+    assert result.gradable
+    assert "CSVとして読み取れません" in result.reasons[0]
+
+
+def test_unparsable_expected_csv_is_not_gradable():
+    expected = b"a,b\n1," + b"x" * 140_000 + b"\n"
+    result = compare_files(expected, b"a,b\n1,2\n", CSV)
+    assert not result.passed
+    assert not result.gradable
+
+
 def test_train_test_split_ok():
     train = table(["customer_id", "x"], UNIVERSE.rows[:8])
     test = table(["customer_id", "x"], UNIVERSE.rows[8:])

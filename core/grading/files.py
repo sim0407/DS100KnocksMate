@@ -4,6 +4,8 @@
   指定の区切り文字で分けて比較する。UTF-8 指定では BOM 付きも許容する
 - 行の順序は問わない（重複は数える）。数値は表記の違い（198 と 198.0）を同一視する
 - コード値のゼロ埋め（"04"）は文字列のまま比べ、4 とは区別する
+- 学習者のファイルがCSVとして読めない（巨大な項目・引用符の崩れ等）ときは不正解として理由を返す。
+  期待ファイルが読めないときは採点不可（gradable=False）
 """
 
 from __future__ import annotations
@@ -52,12 +54,26 @@ def _canon(row: list[str]) -> tuple:
 
 def compare_files(expected: bytes, actual: bytes, fmt: FileFormat) -> Comparison:
     """expected は模範解答が出力したファイルの中身。"""
-    expected_rows = _rows(_decode(expected, fmt.encoding), fmt.delimiter)
+    try:
+        expected_rows = _rows(_decode(expected, fmt.encoding), fmt.delimiter)
+    except (UnicodeDecodeError, csv.Error):
+        return Comparison(
+            False, ["期待するファイルを読み取れないため自動採点できません"], gradable=False
+        )
     try:
         actual_text = _decode(actual, fmt.encoding)
     except UnicodeDecodeError:
         return Comparison(False, [f"文字コードが {fmt.encoding.upper()} ではないようです"])
-    actual_rows = _rows(actual_text, fmt.delimiter)
+    try:
+        actual_rows = _rows(actual_text, fmt.delimiter)
+    except csv.Error as exc:
+        return Comparison(
+            False,
+            [
+                f"ファイルをCSVとして読み取れません（{exc}）。"
+                '1つの項目が大きすぎるか、引用符（"）の対応が崩れていないか確認してください'
+            ],
+        )
     if not actual_rows:
         return Comparison(False, ["ファイルが空です"])
 

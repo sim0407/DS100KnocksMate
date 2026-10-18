@@ -107,7 +107,23 @@ def test_parse_request_accepts_setup_and_collect_files():
     code, limits, options = parse_request(
         b'{"code": "1", "setup": "x = 1", "collect_files": true}', Limits(), with_options=True
     )
-    assert options == {"setup": "x = 1", "collect_files": True}
+    assert options == {"setup": "x = 1", "collect_files": True, "artifacts": ()}
+
+
+def test_parse_request_accepts_artifacts():
+    _, _, options = parse_request(
+        b'{"code": "1", "artifacts": ["df_train", "df_test"]}', Limits(), with_options=True
+    )
+    assert options["artifacts"] == ("df_train", "df_test")
+
+
+@pytest.mark.parametrize(
+    "artifacts",
+    ['"df"', '["a b"]', "[1]", '["os.system"]', "[" + ",".join(['"a"'] * 11) + "]"],
+)
+def test_parse_request_rejects_bad_artifacts(artifacts):
+    with pytest.raises(BadRequest):
+        parse_request(f'{{"code": "1", "artifacts": {artifacts}}}'.encode(), Limits())
 
 
 def test_parse_request_rejects_bad_setup():

@@ -36,9 +36,11 @@ def run_python(
     timeout_sec: float = 10.0,
     setup: str = "",
     collect_files: bool = False,
+    artifacts: tuple[str, ...] = (),
 ) -> dict:
     """setup: 学習者コードの前に同じ名前空間で実行する準備コード（前の問題のデータ作成など）。
     collect_files: 出力先 data フォルダのファイルを応答の files に含める。
+    artifacts: 実行後に取り出す変数名（応答の artifacts に {名前: 値} で返す。採点用）。
     """
     started = time.monotonic()
     payload = {"code": code, "max_rows": max_rows, "timeout_sec": timeout_sec}
@@ -46,6 +48,8 @@ def run_python(
         payload["setup"] = setup
     if collect_files:
         payload["collect_files"] = True
+    if artifacts:
+        payload["artifacts"] = list(artifacts)
     body = json.dumps(payload).encode()
     request = urllib.request.Request(
         url.rstrip("/") + "/execute",

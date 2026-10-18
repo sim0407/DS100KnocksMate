@@ -52,6 +52,7 @@ class TrainerService:
                 timeout_sec=timeout_sec,
                 setup=options.setup,
                 collect_files=options.collect_files,
+                artifacts=options.artifacts,
             )
 
         def sql_runner(code: str, max_rows: int, timeout_sec: float, options: ExecOptions) -> dict:
@@ -63,6 +64,7 @@ class TrainerService:
                 writable=options.writable,
                 setup=options.setup,
                 stdin_query=options.stdin_query,
+                artifacts=options.artifacts,
             )
 
         return cls(

@@ -204,50 +204,89 @@ def test_reference_cache_is_bounded():
 
 
 class RecordingRunner(FakeRunner):
-    """コードの末尾に付け足された変数名/テーブル名で応答を決める。"""
+    """コードで応答を決め、呼び出し（コード, 指定）を記録する。"""
 
     def __call__(self, code, max_rows, timeout_sec, options=None):
         self.calls.append((code, options))
-        last = code.strip().splitlines()[-1]
-        return self.responses.get(last, self.responses.get(code))
+        return self.responses[code]
 
 
-def test_artifact_is_appended_and_graded():
+def with_artifacts(**tables):
+    """作成したデータ（artifacts）を返す応答。値は table() の応答。"""
+    return {
+        "status": "ok",
+        "result": None,
+        "artifacts": {name: t["result"] for name, t in tables.items()},
+    }
+
+
+def test_artifact_is_requested_from_runner_and_graded():
     spec = GradingSpec("table", reference="REF", table=TableSpec(), artifacts=("df_product_1",))
-    runner = RecordingRunner({"df_product_1": table(["a"], [[1]])})
+    runner = RecordingRunner(
+        {
+            "REF": with_artifacts(df_product_1=table(["a"], [[1]])),
+            "df_product_1 = ...": with_artifacts(df_product_1=table(["a"], [[1]])),
+        }
+    )
     result = grade(exercise(spec), "python", "df_product_1 = ...", runner, ReferenceCache())
     assert result.status == "passed"
-    assert runner.calls[0][0] == "df_product_1 = ...\ndf_product_1"
+    code, options = runner.calls[0]
+    assert code == "df_product_1 = ..."  # コードはそのまま（末尾に行を足さない）
+    assert options.artifacts == ("df_product_1",)
 
 
 def test_missing_artifact_message():
     spec = GradingSpec("table", reference="REF", table=TableSpec(), artifacts=("df_product_1",))
-    missing = failure("error", "NameError", "name 'df_product_1' is not defined", 2)
-    runner = RecordingRunner({"df_product_1": missing})
+    missing = failure("error", "NameError", "name 'df_product_1' is not defined")
+    runner = RecordingRunner({"x = 1": missing})
     result = grade(exercise(spec), "python", "x = 1", runner, ReferenceCache())
     assert result.status == "failed"
     assert "df_product_1" in result.feedback[0]
     assert "見つかりません" in result.feedback[0]
 
 
-def test_sql_artifact_appends_select():
+def test_missing_second_artifact_message():
+    spec = GradingSpec("table", reference="REF", table=TableSpec(), artifacts=("a", "b"))
+    missing = failure("error", "UndefinedTable", 'relation "b" does not exist')
+    runner = RecordingRunner({"CREATE TABLE a ...": missing})
+    result = grade(exercise(spec), "sql", "CREATE TABLE a ...", runner, ReferenceCache())
+    assert result.status == "failed"
+    assert "テーブル b が見つかりません" in result.feedback[0]
+
+
+def test_sql_artifact_uses_writable_options():
     spec = GradingSpec(
         "table", reference="REF", table=TableSpec(), artifacts=("product_1",), writable=True
     )
-    runner = RecordingRunner({"SELECT * FROM product_1": table(["a"], [[1]])})
+    created = with_artifacts(product_1=table(["a"], [[1]]))
+    runner = RecordingRunner({"REF": created, "CREATE TABLE product_1 AS SELECT 1 AS a;": created})
     result = grade(
         exercise(spec), "sql", "CREATE TABLE product_1 AS SELECT 1 AS a;", runner, ReferenceCache()
     )
     assert result.status == "passed"
-    code, options = runner.calls[0]
-    assert code.endswith("SELECT * FROM product_1")
+    _, options = runner.calls[0]
     assert options.writable is True
+    assert options.artifacts == ("product_1",)
 
 
 def test_multiple_artifacts_all_must_match():
     spec = GradingSpec("table", reference="REF", table=TableSpec(), artifacts=("a", "b"))
-    runner = RecordingRunner({"a": table(["x"], [[1]]), "b": table(["x"], [[2]])})
-    assert grade(exercise(spec), "python", "...", runner, ReferenceCache()).status == "passed"
+    ref = with_artifacts(a=table(["x"], [[1]]), b=table(["x"], [[2]]))
+    wrong_b = with_artifacts(a=table(["x"], [[1]]), b=table(["x"], [[3]]))
+    runner = RecordingRunner({"REF": ref, "ok": ref, "ng": wrong_b})
+    assert grade(exercise(spec), "python", "ok", runner, ReferenceCache()).status == "passed"
+    result = grade(exercise(spec), "python", "ng", runner, ReferenceCache())
+    assert result.status == "failed"
+    assert result.feedback[0].startswith("b: ")
+
+
+def test_learner_code_runs_once_for_multiple_artifacts():
+    """乱数を使うコードでも、取り出すデータの間で結果がずれないよう1回だけ実行する。"""
+    spec = GradingSpec("table", reference="REF", table=TableSpec(), artifacts=("a", "b"))
+    ref = with_artifacts(a=table(["x"], [[1]]), b=table(["x"], [[2]]))
+    runner = RecordingRunner({"REF": ref, "mine": ref})
+    grade(exercise(spec), "python", "mine", runner, ReferenceCache())
+    assert [code for code, _ in runner.calls].count("mine") == 1
 
 
 def test_setup_is_passed_to_runner():
@@ -285,6 +324,28 @@ def test_file_strategy():
     assert runner.calls[0][1].collect_files is True
 
 
+def test_file_strategy_unparsable_learner_file_is_failed():
+    from core.grading.files import FileFormat
+
+    spec = GradingSpec("file", reference="REF", file_format=FileFormat())
+
+    def response(text):
+        return {
+            "status": "ok",
+            "result": None,
+            "files": [
+                {"path": "data/x.csv", "size": 1, "content_b64": b64(text), "truncated": False}
+            ],
+        }
+
+    runner = RecordingRunner(
+        {"REF": response("a,b\n1,2\n"), "mine": response("a,b\n1," + "x" * 140_000)}
+    )
+    result = grade(exercise(spec), "python", "mine", runner, ReferenceCache())
+    assert result.status == "failed"
+    assert "CSVとして読み取れません" in result.feedback[0]
+
+
 def test_custom_validator_strategy():
     spec = GradingSpec(
         "custom",
@@ -296,8 +357,30 @@ def test_custom_validator_strategy():
     runner = RecordingRunner(
         {
             "REF": table(["id"], [[1], [2]]),
-            "df_train": table(["id"], [[1]]),
-            "df_test": table(["id"], [[2]]),
+            "mine": with_artifacts(df_train=table(["id"], [[1]]), df_test=table(["id"], [[2]])),
         }
     )
-    assert grade(exercise(spec), "python", "...", runner, ReferenceCache()).status == "passed"
+    assert grade(exercise(spec), "python", "mine", runner, ReferenceCache()).status == "passed"
+    learner_calls = [options for code, options in runner.calls if code == "mine"]
+    assert len(learner_calls) == 1  # 学習用・テスト用を同じ1回の実行から取り出す
+    assert learner_calls[0].artifacts == ("df_train", "df_test")
+    reference_calls = [options for code, options in runner.calls if code == "REF"]
+    assert reference_calls[0].artifacts == ()  # 参照（対象の全体）は最後の結果
+
+
+def test_custom_validator_detects_overlap_between_artifacts():
+    spec = GradingSpec(
+        "custom",
+        reference="REF",
+        artifacts=("df_train", "df_test"),
+        validator="train_test_split",
+        validator_params={"test_ratio": 0.5},
+    )
+    runner = RecordingRunner(
+        {
+            "REF": table(["id"], [[1], [2]]),
+            "mine": with_artifacts(df_train=table(["id"], [[1]]), df_test=table(["id"], [[1]])),
+        }
+    )
+    result = grade(exercise(spec), "python", "mine", runner, ReferenceCache())
+    assert result.status == "failed"

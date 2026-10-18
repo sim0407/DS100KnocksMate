@@ -2,7 +2,7 @@
 
     GET  /health   -> {"status": "ok"}
     POST /execute  {"code": str, "max_rows"?: int, "timeout_sec"?: float,
-                    "setup"?: str, "collect_files"?: bool} -> 実行結果JSON
+                    "setup"?: str, "collect_files"?: bool, "artifacts"?: [str]} -> 実行結果JSON
 
 起動時にライブラリと教材データを読み込み、実行ごとに worker.sandbox で fork して実行する。
 マルチスレッドのプロセスからの fork は子でデッドロックしうるため、サーバはシングルスレッド
@@ -27,6 +27,7 @@ MAX_BODY_BYTES = 1_000_000
 MAX_CODE_CHARS = 100_000
 MAX_ROWS_LIMIT = 500_000
 MAX_TIMEOUT_SEC = 60.0
+MAX_ARTIFACTS = 10
 
 # 公式Python解答Notebookの共通セットアップのうち、DB接続とIPython依存を除いたもの
 SETUP_CODE = """\
@@ -89,6 +90,13 @@ def parse_request(body: bytes, defaults: Limits, *, with_options: bool = False):
     collect_files = payload.get("collect_files", False)
     if not isinstance(collect_files, bool):
         raise BadRequest("collect_files は真偽値が必要です")
+    artifacts = payload.get("artifacts", [])
+    if (
+        not isinstance(artifacts, list)
+        or len(artifacts) > MAX_ARTIFACTS
+        or not all(isinstance(a, str) and a.isidentifier() for a in artifacts)
+    ):
+        raise BadRequest(f"artifacts は変数名のリスト（{MAX_ARTIFACTS}個まで）が必要です")
 
     limits = Limits(
         timeout_sec=float(timeout),
@@ -98,7 +106,15 @@ def parse_request(body: bytes, defaults: Limits, *, with_options: bool = False):
         max_stdout_chars=defaults.max_stdout_chars,
     )
     if with_options:
-        return code, limits, {"setup": setup, "collect_files": collect_files}
+        return (
+            code,
+            limits,
+            {
+                "setup": setup,
+                "collect_files": collect_files,
+                "artifacts": tuple(artifacts),
+            },
+        )
     return code, limits
 
 

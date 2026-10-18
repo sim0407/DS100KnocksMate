@@ -53,7 +53,7 @@
 | answer notebook(s) | `docker/work/answer/ans_preprocess_knock_Python.ipynb`, `docker/work/answer/ans_preprocess_knock_SQL.ipynb` |
 | dataset CSV(s) | `docker/work/data/` の category / customer / geocode / product / receipt / store（計約23MB、最大 geocode 12.8MB、UTF-8 BOM付き） |
 | SQL init scripts | `docker/db/init/1_init.sql`（ユーザー作成）, `2_create_table.sh`（DDL）, `3_load.sql`（`COPY ... WITH CSV HEADER`） |
-| 適用したLICENSE/NOTICE | 未実施（取り込み時に上流LICENSEのMIT部分を `THIRD_PARTY_NOTICES.md` に同梱予定） |
+| 適用したLICENSE/NOTICE | 実施済み: 上流 `LICENSE` の原本を `upstream/100knocks-preprocess/` に同梱し、MIT部分・出典・同梱 commit を `THIRD_PARTY_NOTICES.md` に記載（ガイドPDF・ロゴは同梱しない） |
 | データ型・問題採点の調査 | 冒頭12問と全100問の特徴スキャンを実施（下記 §6） |
 
 ## 6. 現物調査メモ（2026-10-17）

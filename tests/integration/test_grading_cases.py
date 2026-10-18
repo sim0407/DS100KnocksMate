@@ -31,6 +31,7 @@ def runner(language):
             timeout_sec=timeout,
             setup=options.setup,
             collect_files=options.collect_files,
+            artifacts=options.artifacts,
         )
     return lambda code, rows, timeout, options: run_sql(
         code,
@@ -40,6 +41,7 @@ def runner(language):
         writable=options.writable,
         setup=options.setup,
         stdin_query=options.stdin_query,
+        artifacts=options.artifacts,
     )
 
 
@@ -631,6 +633,30 @@ CASES = [
         "df_all = df_customer[df_customer.customer_id.isin(ids)]\n"
         "df_train, df_test = train_test_split(df_all, test_size=0.5, random_state=0)",
         "failed",
+    ),
+    (
+        "089",
+        "python",
+        'ids = df_receipt.groupby("customer_id").amount.sum().loc[lambda s: s > 0].index\n'
+        "df_all = df_customer[df_customer.customer_id.isin(ids)]\n"
+        "df_train, df_test = train_test_split(df_all, test_size=0.2)",
+        "passed",  # 乱数のシードを固定しなくても正解（1回の実行から両方を取り出す）
+    ),
+    (
+        "089",
+        "sql",
+        "CREATE TABLE sales_customer AS SELECT * FROM customer WHERE customer_id IN\n"
+        "  (SELECT customer_id FROM receipt GROUP BY customer_id HAVING SUM(amount) > 0);\n"
+        "CREATE TABLE customer_test AS SELECT * FROM sales_customer ORDER BY random()\n"
+        "  LIMIT (SELECT ROUND(COUNT(*) * 0.2) FROM sales_customer);\n"
+        "CREATE TABLE customer_train AS SELECT * FROM sales_customer EXCEPT SELECT * FROM customer_test;",
+        "passed",  # setseed なしでも正解
+    ),
+    (
+        "089",
+        "sql",
+        "CREATE TABLE customer_train AS SELECT * FROM customer LIMIT 10;",
+        "failed",  # customer_test がない
     ),
     (
         "091",

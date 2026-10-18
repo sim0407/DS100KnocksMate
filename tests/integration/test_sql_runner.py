@@ -290,3 +290,66 @@ def test_copy_from_stdin_without_prepared_data_is_error():
 def test_read_only_mode_still_rejects_multiple_statements():
     r = run("CREATE TABLE t AS SELECT 1; SELECT 1")
     assert r["status"] == "error"
+
+
+# ---------------------------------------------------------------- 実行全体の制限時間・結果の大きさ
+
+
+def test_timeout_covers_whole_script_not_each_statement():
+    """1文ずつは制限内でも、合計が制限時間を超えたら打ち切る。"""
+    sql = ";\n".join(["SELECT pg_sleep(0.6)"] * 5)
+    r = run(sql, timeout_sec=1.5, writable=True)
+    assert r["status"] == "timeout"
+    assert r["elapsed_ms"] < 2500
+
+
+def test_learner_cannot_disable_statement_timeout():
+    r = run("SET statement_timeout = 0;\nSELECT pg_sleep(30)", timeout_sec=1, writable=True)
+    assert r["status"] == "timeout"
+    assert r["elapsed_ms"] < 2500
+
+
+def test_learner_set_config_in_read_only_mode_does_not_extend_timeout():
+    r = run("SELECT set_config('statement_timeout', '0', false), pg_sleep(30)", timeout_sec=1)
+    assert r["status"] == "timeout"
+
+
+@pytest.mark.parametrize("writable", [False, True])
+def test_huge_values_are_rejected_before_exhausting_memory(writable):
+    """行数は少なくても、値が巨大な結果は上限で打ち切る（UIのプロセスのメモリを守る）。"""
+    sql = "SELECT repeat('x', 10 * 1024 * 1024) AS s FROM generate_series(1, 20)"
+    r = run(sql, max_rows=300_000, writable=writable)
+    assert r["status"] == "error"
+    assert "大きすぎます" in r["error"]["message"]
+
+
+def test_large_but_allowed_result_is_fetched_completely():
+    r = run("SELECT * FROM receipt", max_rows=300_000, timeout_sec=20)
+    assert r["status"] == "ok"
+    assert len(r["result"]["rows"]) == 104681
+    assert r["result"]["truncated"] is False
+
+
+# ---------------------------------------------------------------- 作成したテーブルの取り出し（採点用）
+
+
+def test_artifacts_come_from_the_same_run():
+    """乱数で分けた2つのテーブルを、同じ1回の実行から取り出す（重なりがない）。"""
+    sql = (
+        "CREATE TABLE t AS SELECT g AS id, random() AS r FROM generate_series(1, 1000) g;\n"
+        "CREATE TABLE tr AS SELECT id FROM t WHERE r < 0.5;\n"
+        "CREATE TABLE te AS SELECT id FROM t WHERE r >= 0.5;"
+    )
+    r = run(sql, artifacts=("tr", "te"), max_rows=5000)
+    assert r["status"] == "ok"
+    train = {row[0] for row in r["artifacts"]["tr"]["rows"]}
+    test = {row[0] for row in r["artifacts"]["te"]["rows"]}
+    assert not train & test
+    assert len(train | test) == 1000
+
+
+def test_missing_artifact_table_is_undefined_table_error():
+    r = run("CREATE TABLE tr AS SELECT 1 AS id", artifacts=("tr", "te"))
+    assert r["status"] == "error"
+    assert r["error"]["type"] == "UndefinedTable"
+    assert '"te"' in r["error"]["message"]

@@ -118,3 +118,24 @@ def test_setup_failure_is_reported_separately():
 def test_error_line_numbers_are_not_shifted_by_setup():
     r = run("a = 1\n1 / 0", setup="x = 1\ny = 2\nz = 3")
     assert r["error"]["lineno"] == 2
+
+
+def test_artifacts_are_returned_from_one_run():
+    code = "import random\nr = random.random()\na = r\nb = r\na"
+    r = execute(code, {}, artifacts=("a", "b"))
+    assert r["status"] == "ok"
+    assert r["result"] is None  # 最後の式の値は返さない
+    assert r["artifacts"]["a"] == r["artifacts"]["b"]
+    assert r["artifacts"]["a"]["type"] == "scalar"
+
+
+def test_missing_artifact_is_name_error():
+    r = execute("a = 1", {}, artifacts=("a", "df_test"))
+    assert r["status"] == "error"
+    assert r["error"]["type"] == "NameError"
+    assert "'df_test'" in r["error"]["message"]
+    assert "artifacts" not in r
+
+
+def test_no_artifacts_key_without_request():
+    assert "artifacts" not in execute("1", {})

@@ -1,7 +1,8 @@
 """学習者のPythonコードを与えられた名前空間で実行し、結果をJSON安全な辞書で返す。
 
 Jupyterと同様に「最後の式の値」を結果とする。print は stdout、警告等は stderr として
-文字数上限付きで捕捉する。プロセス隔離・タイムアウト・資源制限はここでは扱わない
+文字数上限付きで捕捉する。artifacts を指定すると、実行後にその名前の変数を取り出して
+応答の artifacts に {名前: 値} で返す（採点用。このとき最後の式の値は返さない）。プロセス隔離・タイムアウト・資源制限はここでは扱わない
 （worker/sandbox.py が子プロセス内でこの関数を呼ぶ）。
 """
 
@@ -51,6 +52,12 @@ class _SkipUserCode(Exception):
     pass
 
 
+def _lookup(namespace: dict[str, Any], name: str) -> Any:
+    if name not in namespace:
+        raise NameError(f"name '{name}' is not defined")
+    return namespace[name]
+
+
 def _display(*objects: Any, **_: Any) -> None:
     for obj in objects:
         print(obj)
@@ -83,6 +90,7 @@ def execute(
     max_rows: int = 200,
     max_stdout_chars: int = 20000,
     max_text_chars: int = 20000,
+    artifacts: tuple[str, ...] = (),
 ) -> dict:
     started = time.perf_counter()
     stdout = CappedWriter(max_stdout_chars)
@@ -91,6 +99,7 @@ def execute(
     linecache.cache[USER_FILENAME] = (len(code), None, code.splitlines(True), USER_FILENAME)
 
     status, result, error = "ok", None, None
+    collected: dict[str, dict] | None = None
     if setup:
         # 前の問題で作るデータ等を用意する（出力は表示しない）。失敗はアプリ側の問題として区別する
         try:
@@ -116,17 +125,23 @@ def execute(
 
         with redirect_stdout(stdout), redirect_stderr(stderr):
             exec(body, namespace)
-            if expr is not None:
-                value = eval(expr, namespace)
-                try:
+            value = eval(expr, namespace) if expr is not None else None
+            targets = [(name, _lookup(namespace, name)) for name in artifacts]
+            try:
+                if artifacts:
+                    collected = {
+                        name: serialize_value(v, max_rows=max_rows, max_text_chars=max_text_chars)
+                        for name, v in targets
+                    }
+                elif expr is not None:
                     result = serialize_value(
                         value, max_rows=max_rows, max_text_chars=max_text_chars
                     )
-                except Exception as exc:  # 結果のreprが壊れている等
-                    status = "error"
-                    error = _error(exc, user_only=False)
-                    error["type"] = "ResultError"
-                    error["message"] = f"結果の表示に失敗しました: {exc!r}"
+            except Exception as exc:  # 結果のreprが壊れている等
+                status = "error"
+                error = _error(exc, user_only=False)
+                error["type"] = "ResultError"
+                error["message"] = f"結果の表示に失敗しました: {exc!r}"
     except _SkipUserCode:
         pass
     except SyntaxError as exc:
@@ -134,7 +149,7 @@ def execute(
     except BaseException as exc:  # SystemExit等も学習者のエラーとして返す
         status, error = "error", _error(exc)
 
-    return {
+    response = {
         "status": status,
         "result": result,
         "stdout": stdout.getvalue(),
@@ -144,3 +159,6 @@ def execute(
         "error": error,
         "elapsed_ms": int((time.perf_counter() - started) * 1000),
     }
+    if collected is not None:
+        response["artifacts"] = collected
+    return response

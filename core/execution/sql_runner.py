@@ -3,7 +3,9 @@
 安全性はSQL文字列の検査ではなく、DB側で担保する（docker/db/sql/03_roles.sql）:
 - 教材テーブルは SELECT 権限のみ。作れるのはセッション専用の一時テーブルだけ
 - 管理者のネットワークログイン不可、サーバ上のファイル入出力（COPY ... TO/FROM 'ファイル'）不可
-- 本モジュールでも statement_timeout を設定し、最後に必ず ROLLBACK する
+- 本モジュールでも、文を実行する直前ごとに「実行全体の残り時間」を statement_timeout に
+  設定し直す（複数文の合計も制限時間内。学習者が SET statement_timeout = 0 としても次の文で戻る）。
+  最後に必ず ROLLBACK する
 
 2つのモード:
 - 読み取り専用（既定）: `BEGIN READ ONLY` で、`DECLARE ... CURSOR FOR <SQL>` を prepared
@@ -12,9 +14,11 @@
   search_path を pg_temp 優先にし、`CREATE TABLE` は一時スキーマに作られる。
   SELECT はカーソル経由（巨大な結果でもメモリを使わない）、最後の SELECT の結果を返す。
   `COPY ... TO STDOUT` の出力は files に、`COPY ... FROM STDIN` には stdin_query の出力を流す。
-FETCH で先頭 max_rows 行だけ取得し、残りは MOVE で数える。
+FETCH で先頭 max_rows 行だけ（少しずつ、表1つあたり MAX_RESULT_BYTES まで）取得し、残りは MOVE で数える。
+artifacts を指定すると、学習者のSQLの後で各テーブルを `SELECT * FROM 名前` で取り出し、
+応答の artifacts に {名前: 表} として返す（1回の実行から複数のテーブルを取り出すため）。
 
-戻り値はPythonワーカーと同じ形の辞書（status / result / stdout / error / elapsed_ms / files）。
+戻り値はPythonワーカーと同じ形の辞書（status / result / stdout / error / elapsed_ms / files / artifacts）。
 """
 
 from __future__ import annotations
@@ -37,6 +41,10 @@ from core.execution.results import BOOLEAN, DATETIME, FLOAT, INTEGER, OTHER, STR
 CURSOR_NAME = "knocks_q"
 _DECLARE_PREFIX = f"DECLARE {CURSOR_NAME} NO SCROLL CURSOR FOR "
 MAX_COPY_BYTES = 16 * 1024 * 1024
+# 結果の表1つあたりの大きさの上限（文字数の概算）。UIと同じプロセスのメモリを守る
+MAX_RESULT_BYTES = 64 * 1024 * 1024
+FETCH_CHUNK_ROWS = 5000
+_FIRST_CHUNK_ROWS = 100
 
 _KIND_BY_TYPE = {
     **dict.fromkeys(("int2", "int4", "int8", "oid"), INTEGER),
@@ -58,7 +66,9 @@ def normalize_sql(sql: str) -> str:
     return "\n".join(lines).strip()
 
 
-def _response(status: str, started: float, *, result=None, error=None, files=None) -> dict:
+def _response(
+    status: str, started: float, *, result=None, error=None, files=None, artifacts=None
+) -> dict:
     response = {
         "status": status,
         "result": result,
@@ -71,6 +81,8 @@ def _response(status: str, started: float, *, result=None, error=None, files=Non
     }
     if files is not None:
         response["files"] = files
+    if artifacts is not None:
+        response["artifacts"] = artifacts
     return response
 
 
@@ -100,6 +112,18 @@ def _convert(value: Any) -> Any:
 
 class _AppError(Exception):
     """学習者に見せるアプリ側のエラー（COPY FROM STDIN のデータがない等）。"""
+
+
+class _Timeout(Exception):
+    """実行全体の期限を過ぎた（次の文を実行する前に検出）。"""
+
+
+class _ArtifactError(Exception):
+    """採点対象のテーブルを取り出せなかった（テーブルがない等）。"""
+
+    def __init__(self, exc: psycopg.Error) -> None:
+        super().__init__(str(exc))
+        self.exc = exc
 
 
 class _StatementError(Exception):
@@ -155,25 +179,72 @@ def _error_message(
 # ---------------------------------------------------------------- 実行の部品
 
 
-def _fetch_table(conn: psycopg.Connection, cursor_name: str, max_rows: int) -> dict:
-    cur = conn.execute(f"FETCH FORWARD {int(max_rows)} FROM {cursor_name}")
-    rows = cur.fetchall()
-    description = cur.description or []
-    moved = conn.execute(f"MOVE FORWARD ALL IN {cursor_name}").statusmessage or "MOVE 0"
+class _Session:
+    """1回の実行: 接続と、実行全体の期限。"""
+
+    def __init__(self, conn: psycopg.Connection, timeout_sec: float) -> None:
+        self.conn = conn
+        self.expires_at = time.monotonic() + timeout_sec
+
+    def arm(self) -> None:
+        """次の文の statement_timeout を残り時間にする（期限切れなら _Timeout）。"""
+        remaining_ms = int((self.expires_at - time.monotonic()) * 1000)
+        if remaining_ms <= 0:
+            raise _Timeout
+        self.conn.execute("SELECT set_config('statement_timeout', %s, true)", [f"{remaining_ms}ms"])
+
+    def execute(self, statement: str, *, prepare: bool | None = None) -> psycopg.Cursor:
+        self.arm()
+        return self.conn.execute(statement, prepare=prepare)
+
+
+def _row_size(row: list) -> int:
+    return sum(len(v) if isinstance(v, str) else 8 for v in row) + 8
+
+
+def _fetch_table(session: _Session, cursor_name: str, max_rows: int) -> dict:
+    """カーソルから max_rows 行まで取得する。大きさが MAX_RESULT_BYTES を超えたらエラー。
+
+    1行の大きさを見ながら1回に取る行数を決め、上限を大きく超えて読み込まないようにする。
+    """
+    rows: list[list] = []
+    description: list = []
+    size, chunk, largest = 0, _FIRST_CHUNK_ROWS, 1
+    while len(rows) < max_rows:
+        n = min(chunk, max_rows - len(rows))
+        cur = session.execute(f"FETCH FORWARD {int(n)} FROM {cursor_name}")
+        description = cur.description or description
+        fetched = cur.fetchall()
+        for raw in fetched:
+            row = [_convert(v) for v in raw]
+            row_size = _row_size(row)
+            size += row_size
+            largest = max(largest, row_size)
+            if size > MAX_RESULT_BYTES:
+                raise _AppError(
+                    f"結果が大きすぎます（上限 約{MAX_RESULT_BYTES // 1024 // 1024}MB）。"
+                    "LIMIT で行数を絞るか、列を選んでください"
+                )
+            rows.append(row)
+        if len(fetched) < n:
+            break
+        chunk = max(1, min(FETCH_CHUNK_ROWS, (MAX_RESULT_BYTES - size) // largest))
+    moved = session.execute(f"MOVE FORWARD ALL IN {cursor_name}").statusmessage or "MOVE 0"
     remaining = int(moved.split()[-1])
     return {
         "type": "table",
         "columns": [d.name for d in description],
-        "rows": [[_convert(v) for v in row] for row in rows],
+        "rows": rows,
         "kinds": [_kind(d.type_code) for d in description],
         "row_count": len(rows) + remaining,
         "truncated": remaining > 0,
     }
 
 
-def _copy_out(conn: psycopg.Connection, statement: str) -> bytes:
+def _copy_out(session: _Session, statement: str) -> bytes:
     chunks, size = [], 0
-    with conn.cursor().copy(statement) as copy:
+    session.arm()
+    with session.conn.cursor().copy(statement) as copy:
         for chunk in copy:
             size += len(chunk)
             if size > MAX_COPY_BYTES:
@@ -184,8 +255,9 @@ def _copy_out(conn: psycopg.Connection, statement: str) -> bytes:
     return b"".join(chunks)
 
 
-def _copy_in(conn: psycopg.Connection, statement: str, data: bytes) -> None:
-    with conn.cursor().copy(statement) as copy:
+def _copy_in(session: _Session, statement: str, data: bytes) -> None:
+    session.arm()
+    with session.conn.cursor().copy(statement) as copy:
         copy.write(data)
 
 
@@ -229,22 +301,24 @@ def _file(index: int, data: bytes) -> dict:
 
 
 def _run_script(
-    conn: psycopg.Connection,
+    session: _Session,
     query: str,
     *,
     setup: str,
     stdin_query: str,
     max_rows: int,
 ) -> tuple[dict | None, list[dict]]:
-    conn.execute("SET LOCAL search_path = pg_temp, public")  # CREATE TABLE は一時スキーマへ
+    session.execute("SET LOCAL search_path = pg_temp, public")  # CREATE TABLE は一時スキーマへ
     for _, statement in split_statements(setup):
         try:
-            conn.execute(statement)
+            session.execute(statement)
         except psycopg.Error as exc:
+            if isinstance(exc, errors.QueryCanceled):
+                raise
             raise _AppError(
                 f"前提データの準備に失敗しました（アプリ側の問題の可能性があります）: {exc}"
             ) from exc
-    stdin_data = _copy_out(conn, stdin_query) if stdin_query else None
+    stdin_data = _copy_out(session, stdin_query) if stdin_query else None
 
     result, files = None, []
     for index, (offset, statement) in enumerate(split_statements(query)):
@@ -255,22 +329,41 @@ def _run_script(
                 cursor_name = f"{CURSOR_NAME}{index}"
                 prefix = f"DECLARE {cursor_name} NO SCROLL CURSOR FOR "
                 prefix_len = len(prefix)
-                conn.execute(prefix + _without_trailing_semicolon(statement), prepare=True)
-                result = _fetch_table(conn, cursor_name, max_rows)
-                conn.execute(f"CLOSE {cursor_name}")
+                result = None  # 前の結果を先に手放す（メモリ）
+                session.execute(prefix + _without_trailing_semicolon(statement), prepare=True)
+                result = _fetch_table(session, cursor_name, max_rows)
+                session.execute(f"CLOSE {cursor_name}")
             elif kind == "copy_out":
-                files.append(_file(len(files) + 1, _copy_out(conn, statement)))
+                files.append(_file(len(files) + 1, _copy_out(session, statement)))
             elif kind == "copy_in":
                 if stdin_data is None:
                     raise _AppError(
                         "この問題では COPY ... FROM STDIN で読み込むデータは用意されていません。"
                     )
-                _copy_in(conn, statement, stdin_data)
+                _copy_in(session, statement, stdin_data)
             else:
-                conn.execute(statement)
+                session.execute(statement)
         except psycopg.Error as exc:
             raise _StatementError(exc, offset, prefix_len) from exc
     return result, files
+
+
+def _fetch_artifacts(session: _Session, artifacts: tuple[str, ...], max_rows: int) -> dict:
+    """学習者のSQLが作ったテーブルを取り出す（名前は採点定義で識別子と確認済み）。"""
+    tables = {}
+    for index, name in enumerate(artifacts):
+        if not name.isidentifier():
+            raise ValueError(f"テーブル名として使えません: {name!r}")
+        cursor_name = f"knocks_artifact{index}"
+        try:
+            session.execute(f"DECLARE {cursor_name} NO SCROLL CURSOR FOR SELECT * FROM {name}")
+            tables[name] = _fetch_table(session, cursor_name, max_rows)
+            session.execute(f"CLOSE {cursor_name}")
+        except psycopg.Error as exc:
+            if isinstance(exc, errors.QueryCanceled):
+                raise
+            raise _ArtifactError(exc) from exc
+    return tables
 
 
 # ---------------------------------------------------------------- 入口
@@ -285,12 +378,15 @@ def run_sql(
     writable: bool = False,
     setup: str = "",
     stdin_query: str = "",
+    artifacts: tuple[str, ...] = (),
 ) -> dict:
+    """artifacts: 実行後に取り出すテーブル名（応答の artifacts に {名前: 表} で返す）。"""
     started = time.monotonic()
     query = normalize_sql(sql)
     if not query:
         return _response("error", started, error=_error("EmptyQuery", "SQLを入力してください"))
-    writable = writable or bool(setup) or bool(stdin_query)
+    artifacts = tuple(artifacts)
+    writable = writable or bool(setup) or bool(stdin_query) or bool(artifacts)
 
     try:
         conn = psycopg.connect(dsn, connect_timeout=5)
@@ -304,41 +400,38 @@ def run_sql(
         )
 
     files: list[dict] | None = [] if writable else None
+
+    def timed_out() -> dict:
+        message = f"制限時間（{timeout_sec:g}秒）を超えました"
+        return _response("timeout", started, error=_error("timeout", message), files=files)
+
     try:
         # read_only=True なら BEGIN READ ONLY、False なら BEGIN READ WRITE（ロール既定の読み取り専用を上書き）
         conn.read_only = not writable
-        conn.execute(
-            "SELECT set_config('statement_timeout', %s, true)", [f"{int(timeout_sec * 1000)}ms"]
-        )
+        session = _Session(conn, timeout_sec)
         if writable:
             result, files = _run_script(
-                conn, query, setup=setup, stdin_query=stdin_query, max_rows=max_rows
+                session, query, setup=setup, stdin_query=stdin_query, max_rows=max_rows
             )
         else:
-            conn.execute(_DECLARE_PREFIX + query, prepare=True)
-            result = _fetch_table(conn, CURSOR_NAME, max_rows)
-        return _response("ok", started, result=result, files=files)
-    except errors.QueryCanceled:
-        return _response(
-            "timeout",
-            started,
-            error=_error("timeout", f"制限時間（{timeout_sec:g}秒）を超えました"),
-            files=files,
-        )
+            session.execute(_DECLARE_PREFIX + query, prepare=True)
+            result = _fetch_table(session, CURSOR_NAME, max_rows)
+        tables = _fetch_artifacts(session, artifacts, max_rows) if artifacts else None
+        return _response("ok", started, result=result, files=files, artifacts=tables)
+    except (_Timeout, errors.QueryCanceled):
+        return timed_out()
     except _StatementError as exc:
         if isinstance(exc.exc, errors.QueryCanceled):
-            return _response(
-                "timeout",
-                started,
-                error=_error("timeout", f"制限時間（{timeout_sec:g}秒）を超えました"),
-                files=files,
-            )
+            return timed_out()
         message, lineno = _error_message(
             query, exc.exc, offset=exc.offset, prefix_len=exc.prefix_len
         )
         return _response(
             "error", started, error=_error(type(exc.exc).__name__, message, lineno), files=files
         )
+    except _ArtifactError as exc:
+        message = exc.exc.diag.message_primary or str(exc.exc).splitlines()[0]
+        return _response("error", started, error=_error(type(exc.exc).__name__, message))
     except _AppError as exc:
         return _response("error", started, error=_error("AppError", str(exc)), files=files)
     except psycopg.Error as exc:

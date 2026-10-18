@@ -119,6 +119,7 @@ def _child_main(
     workdir: str,
     setup: str,
     collect_files: bool,
+    artifacts: tuple[str, ...],
 ):
     try:
         _harden_child(limits, workdir)
@@ -128,6 +129,7 @@ def _child_main(
             setup=setup,
             max_rows=limits.max_rows,
             max_stdout_chars=limits.max_stdout_chars,
+            artifacts=artifacts,
         )
         if collect_files:
             result["files"] = _collect_files(workdir, limits)
@@ -155,6 +157,7 @@ def run_in_sandbox(
     limits: Limits,
     setup: str = "",
     collect_files: bool = False,
+    artifacts: tuple[str, ...] = (),
 ) -> dict:
     started = time.monotonic()
     workdir = tempfile.mkdtemp(prefix="knocks-run-")
@@ -163,7 +166,9 @@ def run_in_sandbox(
     pid = os.fork()
     if pid == 0:
         os.close(rfd)
-        _child_main(code, base_namespace, limits, wfd, workdir, setup, collect_files)
+        _child_main(
+            code, base_namespace, limits, wfd, workdir, setup, collect_files, tuple(artifacts)
+        )
     os.close(wfd)
 
     def elapsed_ms() -> int:

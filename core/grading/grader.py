@@ -6,7 +6,8 @@
 
 採点対象:
 - 既定: 最後の式（Python）/ 最後の SELECT（SQL）の結果
-- artifacts: 作成した変数（Python）/ テーブル（SQL）。コードの末尾に名前 / SELECT * FROM 名前 を足して取り出す
+- artifacts: 作成した変数（Python）/ テーブル（SQL）。ランナーに名前を渡し、実行後に取り出してもらう。
+  学習者のコードは1回だけ実行する（乱数を使う問題で、取り出すデータの間で結果がずれないように）
 - strategy="file": data フォルダ（Python）/ COPY ... TO STDOUT（SQL）に出力したファイル
 - strategy="custom": 性質による採点（乱数を使う問題。core.grading.validators）
 """
@@ -39,6 +40,7 @@ class ExecOptions:
     writable: bool = False  # SQL のみ
     stdin_query: str = ""  # SQL のみ
     collect_files: bool = False  # Python のみ（data フォルダのファイルを返す）
+    artifacts: tuple[str, ...] = ()  # 実行後に取り出す変数/テーブル（応答の artifacts）
 
 
 # (code, max_rows, timeout_sec, options) -> ランナーの応答辞書（core.execution.*_runner と同じ形）
@@ -70,12 +72,12 @@ class ReferenceCache:
 
     def __init__(self, max_entries: int = 4) -> None:
         self.max_entries = max_entries
-        self._data: OrderedDict[tuple[str, str, str], dict] = OrderedDict()
+        self._data: OrderedDict[tuple, dict] = OrderedDict()
 
     def __len__(self) -> int:
         return len(self._data)
 
-    def get_or_run(self, key: tuple[str, str, str], run: Callable[[], dict | None]) -> dict | None:
+    def get_or_run(self, key: tuple, run: Callable[[], dict | None]) -> dict | None:
         if key in self._data:
             self._data.move_to_end(key)
             return self._data[key]
@@ -114,22 +116,23 @@ def _as_scalar(result: dict) -> dict:
     return result
 
 
-def options_for(spec: GradingSpec, *, collect_files: bool = False) -> ExecOptions:
+def options_for(
+    spec: GradingSpec, *, collect_files: bool = False, artifacts: tuple[str, ...] = ()
+) -> ExecOptions:
     return ExecOptions(
         setup=spec.setup,
         writable=spec.writable,
         stdin_query=spec.stdin_query,
         collect_files=collect_files,
+        artifacts=artifacts,
     )
 
 
-def with_artifact(code: str, artifact: str | None, language: str) -> str:
-    """コードの末尾に、採点する変数/テーブルを取り出す行を足す。"""
+def _target(response: dict, artifact: str | None) -> dict | None:
+    """応答から採点する結果を取り出す: 最後の結果、または作成した変数/テーブル。"""
     if artifact is None:
-        return code
-    if language == "sql":
-        return f"{code.rstrip()}\n;\nSELECT * FROM {artifact}"
-    return f"{code}\n{artifact}"
+        return response.get("result")
+    return (response.get("artifacts") or {}).get(artifact)
 
 
 def _missing_artifact(response: dict, artifact: str, language: str) -> str | None:
@@ -139,7 +142,7 @@ def _missing_artifact(response: dict, artifact: str, language: str) -> str | Non
         return (
             f"変数 {artifact} が見つかりません。作成したデータを変数 {artifact} に入れてください。"
         )
-    if language == "sql" and error.get("type") == "UndefinedTable" and artifact in message:
+    if language == "sql" and error.get("type") == "UndefinedTable" and f'"{artifact}"' in message:
         return f"テーブル {artifact} が見つかりません。CREATE TABLE {artifact} AS ... で作成してください。"
     return None
 
@@ -185,19 +188,18 @@ class _Grading:
         self.runner, self.cache = runner, cache
         self.spec = exercise.grading[language]
 
-    def run(self, code: str, *, collect_files: bool = False) -> dict:
-        options = options_for(self.spec, collect_files=collect_files)
+    def run(
+        self, code: str, *, artifacts: tuple[str, ...] = (), collect_files: bool = False
+    ) -> dict:
+        options = options_for(self.spec, collect_files=collect_files, artifacts=artifacts)
         return self.runner(code, GRADE_MAX_ROWS, GRADE_TIMEOUT_SEC, options)
 
-    def learner(
-        self, artifact: str | None, *, collect_files: bool = False
-    ) -> tuple[dict | None, GradeResult | None]:
-        """(学習者の応答, エラー時の採点結果)。"""
-        response = self.run(
-            with_artifact(self.code, artifact, self.language), collect_files=collect_files
-        )
+    def learner(self, *, collect_files: bool = False) -> tuple[dict | None, GradeResult | None]:
+        """(学習者の応答, エラー時の採点結果)。作成したデータ（artifacts）もこの1回の実行から取り出す。"""
+        artifacts = self.spec.artifacts
+        response = self.run(self.code, artifacts=artifacts, collect_files=collect_files)
         if response.get("status") != "ok":
-            if artifact is not None:
+            for artifact in artifacts:
                 missing = _missing_artifact(response, artifact, self.language)
                 if missing:
                     return None, GradeResult("failed", [missing])
@@ -205,52 +207,52 @@ class _Grading:
         return response, None
 
     def reference(
-        self, code: str, artifact: str | None, *, collect_files: bool = False
+        self, code: str, artifacts: tuple[str, ...] = (), *, collect_files: bool = False
     ) -> dict | None:
-        full = with_artifact(code, artifact, self.language)
+        """模範解答の応答。失敗した・採点する結果がない・行数が上限を超えた場合は None。"""
 
         def run() -> dict | None:
-            response = self.run(full, collect_files=collect_files)
+            response = self.run(code, artifacts=artifacts, collect_files=collect_files)
             if response.get("status") != "ok":
                 return None
             if collect_files:
                 return response
-            result = response.get("result")
-            if result is None or result.get("truncated"):
-                return None
-            return result
+            for artifact in artifacts or (None,):
+                result = _target(response, artifact)
+                if result is None or result.get("truncated"):
+                    return None
+            return response
 
-        return self.cache.get_or_run((self.language, self.exercise.id, full), run)
+        key = (self.language, self.exercise.id, code, artifacts, collect_files)
+        return self.cache.get_or_run(key, run)
 
 
 def _grade_values(g: _Grading) -> GradeResult:
     """table / scalar: 最後の結果（または artifacts の各データ）を参照結果と比べる。"""
     spec = g.spec
-    targets = spec.artifacts or (None,)
-    for artifact in targets:
-        response, error = g.learner(artifact)
-        if error:
-            return error
-        result = response.get("result")
+    response, error = g.learner()
+    if error:
+        return error
+    for artifact in spec.artifacts or (None,):
+        result = _target(response, artifact)
         if result is None:
             return GradeResult("error", [NO_RESULT_MESSAGE])
 
-        reference = g.reference(spec.reference or "", artifact)
+        reference = g.reference(spec.reference or "", spec.artifacts)
         if reference is None:
             return GradeResult("manual_review", [_REFERENCE_FAILED])
-        outcome = _evaluate(spec, result, reference)
+        outcome = _evaluate(spec, result, _target(reference, artifact))
         if outcome.status == "failed":
             # 許容する別の参照（ddof の違い・表記の違いなど）のどれかに一致すれば正解
             for alternative in spec.alternatives:
-                alt_reference = g.reference(alternative, artifact)
-                if (
-                    alt_reference is not None
-                    and _evaluate(spec, result, alt_reference).status == "passed"
+                alt = g.reference(alternative, spec.artifacts)
+                if alt is not None and _evaluate(spec, result, _target(alt, artifact)).status == (
+                    "passed"
                 ):
                     outcome = GradeResult("passed", ["正解です！"])
                     break
         if outcome.status != "passed":
-            if artifact is not None and len(targets) > 1:
+            if artifact is not None and len(spec.artifacts) > 1:
                 outcome = GradeResult(
                     outcome.status, [f"{artifact}: {r}" for r in outcome.feedback]
                 )
@@ -264,7 +266,7 @@ def _decoded_files(response: dict) -> list[tuple[str, bytes]]:
 
 def _grade_file(g: _Grading) -> GradeResult:
     spec = g.spec
-    response, error = g.learner(None, collect_files=True)
+    response, error = g.learner(collect_files=True)
     if error:
         return error
     learner_files = _decoded_files(response)
@@ -272,7 +274,7 @@ def _grade_file(g: _Grading) -> GradeResult:
         where = "COPY ... TO STDOUT の出力" if g.language == "sql" else "出力先（./data）のファイル"
         return GradeResult("failed", [f"{where}が見つかりません。ファイルが出力されていません。"])
 
-    reference = g.reference(spec.reference or "", None, collect_files=True)
+    reference = g.reference(spec.reference or "", collect_files=True)
     expected_files = _decoded_files(reference) if reference else []
     if len(expected_files) != 1:
         return GradeResult("manual_review", [_REFERENCE_FAILED])
@@ -283,6 +285,8 @@ def _grade_file(g: _Grading) -> GradeResult:
         comparison = compare_files(expected, content, spec.file_format)
         if comparison.passed:
             return GradeResult("passed", ["正解です！"])
+        if not comparison.gradable:
+            return GradeResult("manual_review", comparison.reasons)
         if first_failure is None:
             label = "出力" if g.language == "sql" else path
             first_failure = [f"{label}: {r}" for r in comparison.reasons]
@@ -291,18 +295,19 @@ def _grade_file(g: _Grading) -> GradeResult:
 
 def _grade_custom(g: _Grading) -> GradeResult:
     spec = g.spec
+    response, error = g.learner()
+    if error:
+        return error
     tables: dict[str, TableResult] = {}
     for role, artifact in zip(VALIDATOR_ROLES[spec.validator], spec.artifacts, strict=True):
-        response, error = g.learner(artifact)
-        if error:
-            return error
-        result = response.get("result")
+        result = _target(response, artifact)
         if result is None or result.get("type") != "table":
             return GradeResult("failed", [f"{artifact} は表（DataFrame / テーブル）にしてください"])
         if result.get("truncated"):
             return GradeResult("failed", [f"{artifact} の行数が多すぎます"])
         tables[role] = _table(result)
-    universe = g.reference(spec.reference or "", None)
+    reference = g.reference(spec.reference or "")
+    universe = reference["result"] if reference else None
     if universe is None or universe.get("type") != "table":
         return GradeResult("manual_review", [_REFERENCE_FAILED])
     comparison = VALIDATORS[spec.validator](tables, _table(universe), spec.validator_params)

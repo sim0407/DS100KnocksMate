@@ -1,4 +1,4 @@
-"""100本ノック トレーナー（Streamlit UI）。
+"""DS100KnocksMate（Streamlit UI）。
 
 起動（Docker）: docker compose up -d --build → http://127.0.0.1:8501
 学習者のコードはこのプロセスでは実行しない（Pythonは隔離ワーカー、SQLは読み取り専用DB）。
@@ -401,13 +401,14 @@ def render_practice(service: TrainerService, exercise_id: str, language: str, or
 
 
 def main() -> None:
-    st.set_page_config(page_title="100本ノック トレーナー", page_icon="📝", layout="wide")
+    st.set_page_config(page_title="DS100KnocksMate", page_icon="📝", layout="wide")
     service = get_service()
     statuses = service.statuses()
 
     # ---- サイドバー: 表示切替・言語・進捗・問題選択
     with st.sidebar:
-        st.header("100本ノック トレーナー")
+        st.header("DS100KnocksMate")
+        st.caption("データサイエンス100本ノック（構造化データ加工編）の学習アプリ・非公式")
         view = st.radio(
             "表示", list(VIEW_LABELS), format_func=VIEW_LABELS.get, horizontal=True, key="view"
         )

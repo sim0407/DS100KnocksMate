@@ -22,7 +22,7 @@ UIと採点ロジック、問題定義、永続化、Python実行環境を分離
 ## 2. 推奨ディレクトリ（実装開始後に作る）
 
 ```text
-100knocks-trainer/
+DS100KnocksMate/
 ├── CLAUDE.md
 ├── README.md
 ├── app/                     # Streamlit UI, controllers

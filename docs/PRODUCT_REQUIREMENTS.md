@@ -1,4 +1,4 @@
-# プロダクト要件定義 — 100 Knocks Trainer
+# プロダクト要件定義 — DS100KnocksMate
 
 ## 1. 概要
 

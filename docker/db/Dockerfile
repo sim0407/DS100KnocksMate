@@ -1,6 +1,6 @@
 # 教材用PostgreSQL。初期化（スキーマ作成・CSV投入・ロール設定）をビルド時に済ませ、
 # 起動を速くし、コンテナを作り直せば常に元の状態に戻るようにする。教材DBに永続ボリュームは使わない。
-FROM postgres:16.15-trixie@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
+FROM postgres:18.6-trixie@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
 
 # 上流と同じ ja_JP.UTF-8（日本語の並び順・メッセージ）
 RUN sed -i -E 's/^# (ja_JP.UTF-8 UTF-8)/\1/' /etc/locale.gen && locale-gen

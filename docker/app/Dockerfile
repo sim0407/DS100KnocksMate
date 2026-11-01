@@ -1,7 +1,7 @@
 # アプリ（Streamlit UI・採点・進捗保存・SQL実行の呼び出し）。学習者のPythonコードはここで実行しない。
 #
 # 依存の更新:  uv export --only-group app --format requirements-txt --no-emit-project -o docker/app/requirements.txt
-FROM python:3.12.15-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1 AS base
+FROM python:3.12.16-slim@sha256:8523d6abeb48ceae0b7240d30c5808fc26cb79c1a635bacdf19cf3baecfbec07 AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

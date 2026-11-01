@@ -19,7 +19,7 @@ dev = [
     "ruff>=0.17.1",
 ]
 e2e = [
-    "playwright==1.64.0",
+    "playwright==1.64.1",
 ]
 worker = [
     "imbalanced-learn==0.14.2",

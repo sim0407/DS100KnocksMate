@@ -25,7 +25,7 @@ worker = [
     "imbalanced-learn==0.14.2",
     "numpy==2.5.4",
     "pandas==3.0.6",
-    "python-dateutil==2.9.0.post0",
+    "python-dateutil==3.0.0",
     "scikit-learn==1.9.1",
 ]
 
